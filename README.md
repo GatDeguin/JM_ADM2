@@ -31,9 +31,14 @@ La salida estática queda en `dist/`. El proyecto está configurado con `base: '
 
 ## Despliegue en GitHub Pages
 
-1. Ejecutar `npm run build`.
-2. Publicar el contenido de `dist/` en GitHub Pages, o configurar una GitHub Action que ejecute el build y despliegue esa carpeta.
-3. No se requiere servidor ni backend.
+El repo ya incluye un workflow automático en `.github/workflows/deploy-pages.yml`.
+
+1. Asegurarse de usar la rama `main` como rama de trabajo.
+2. En GitHub, ir a **Settings → Pages → Build and deployment** y seleccionar **Source: GitHub Actions**.
+3. Hacer push a `main` (o lanzar manualmente el workflow **Deploy to GitHub Pages** desde la pestaña Actions).
+4. El workflow ejecuta `npm ci`, `npm run build` y publica `dist/` en Pages.
+
+La app usa base dinámica de Vite: en local funciona con `./` y en GitHub Actions publica con `/JM_ADM2/`.
 
 ## Operación local-first
 
