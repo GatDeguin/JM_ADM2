@@ -5,6 +5,7 @@ import { applyImport, buildExcelXml, exportFullExcel, exportModuleCsv, ImportDes
 import { exportBackup, freshSeedState, loadState, restoreBackup, saveState } from './storage';
 import { addOrUpdateEntity, audit, clientMetrics, closeSale, comboStockSummary, commitOperation, createMovement, dashboardMetrics, materialStock, previewInventoryCount, previewProduction, previewPurchase, previewSale, productStock, profitabilityByLine, registerProduction, registerPurchase, runIntegrityChecks, safeRepairState, suggestedExpiryForProduct, supplierPriceHistory, traceMaterialLot, traceProductLot, applyInventoryCount } from './engine';
 import { addMonths, dateLabel, fileDownload, includesText, money, nowISO, parseMl, qty, slug, todayISO, toNumber, uid } from './utils';
+import { fromISODate } from './date';
 import { runInternalTests } from './tests';
 
 const pages = ['Dashboard', 'Ventas', 'Producción', 'Compras', 'Inventario físico', 'Productos', 'Materiales', 'Fórmulas', 'Lotes', 'Clientes', 'Proveedores', 'Costos', 'Combos', 'Movimientos', 'Auditoría', 'Integridad', 'Importar/Exportar', 'Ajustes'];
@@ -49,6 +50,13 @@ function ErrorList({ errors, warnings }: { errors: string[]; warnings?: string[]
     </div>
   );
 }
+
+function validateRequiredDate(value: string, label: string): string[] {
+  if (!value) return [`${label}: la fecha es obligatoria.`];
+  if (!fromISODate(value)) return [`${label}: la fecha no es válida.`];
+  return [];
+}
+
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -113,7 +121,7 @@ export default function App() {
         <nav>
           {pages.map((item) => <button key={item} className={page === item ? 'active' : ''} onClick={() => setPage(item)}>{item}</button>)}
         </nav>
-        <button className="command-button" onClick={() => setPaletteOpen(true)}>⌘K Command palette</button>
+        <button className="command-button" onClick={() => setPaletteOpen(true)}>⌘K Paleta de comandos</button>
       </aside>
       <main className="workspace">
         <TopBar state={state} onExport={exportSuite} onBackup={() => fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8')} />
@@ -251,6 +259,7 @@ function SalesPage({ state, applyState, setPendingConfirm, openDrawer }: PagePro
   const [lineDiscountAmount, setLineDiscountAmount] = useState(0);
   const [duplicate, setDuplicate] = useState<SaleDraftLine | null>(null);
   const preview = useMemo(() => previewSale(state, draft), [state, draft]);
+  const dateErrors = validateRequiredDate(draft.date, 'Fecha de venta');
   const activeClients = state.clients.filter((c) => c.status === 'active').sort((a, b) => a.name.localeCompare(b.name, 'es'));
   const products = state.products.filter((p) => p.active).sort((a, b) => a.name.localeCompare(b.name, 'es'));
   const combos = state.combos.filter((c) => c.active).sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -289,7 +298,7 @@ function SalesPage({ state, applyState, setPendingConfirm, openDrawer }: PagePro
 
   const confirmSale = () => {
     const currentPreview = previewSale(state, draft);
-    if (!currentPreview.ok) return;
+    if (dateErrors.length || !currentPreview.ok) return;
     setPendingConfirm({
       title: 'Confirmar cierre de venta',
       label: 'Cerrar venta',
@@ -316,7 +325,7 @@ function SalesPage({ state, applyState, setPendingConfirm, openDrawer }: PagePro
               </select>
             </Field>
             <Field label="Fecha">
-              <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
+              <input type="date" required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
             </Field>
           </div>
           <div className="line-builder">
@@ -378,7 +387,7 @@ function SalesPage({ state, applyState, setPendingConfirm, openDrawer }: PagePro
             <span>Margen <b>{money(Number(preview.summary?.grossMargin) || 0)}</b></span>
             <span>Saldo/deuda <b>{money(Number(preview.summary?.balance) || 0)}</b></span>
           </div>
-          <button className="primary wide-button" disabled={!preview.ok} onClick={confirmSale}>Cerrar venta</button>
+          <button className="primary wide-button" disabled={dateErrors.length > 0 || !preview.ok} onClick={confirmSale}>Cerrar venta</button>
           {draft.clientId && <button className="ghost wide-button" onClick={() => openDrawer('client', draft.clientId)}>Ver ficha cliente</button>}
         </div>
       </div>
@@ -419,6 +428,11 @@ function ProductionPage({ state, applyState, setPendingConfirm, openDrawer }: Pa
   const product = state.products.find((p) => p.id === draft.productId);
   const formulas = state.formulas.filter((f) => f.active && (!product?.id || !f.productId || f.productId === product.id || f.id === product.formulaId));
   const preview = useMemo(() => previewProduction(state, draft), [state, draft]);
+  const dateErrors = [
+    ...validateRequiredDate(draft.producedAt, 'Fecha de producción'),
+    ...validateRequiredDate(draft.expiry, 'Vencimiento'),
+    ...(fromISODate(draft.producedAt) && fromISODate(draft.expiry) && draft.expiry <= draft.producedAt ? ['Vencimiento: debe ser posterior a la fecha de producción.'] : [])
+  ];
 
   useEffect(() => {
     const prod = state.products.find((p) => p.id === draft.productId);
@@ -426,7 +440,7 @@ function ProductionPage({ state, applyState, setPendingConfirm, openDrawer }: Pa
   }, [draft.productId]);
 
   const confirm = () => {
-    if (!preview.ok) return;
+    if (dateErrors.length || !preview.ok) return;
     setPendingConfirm({
       title: 'Confirmar producción',
       label: 'Registrar producción',
@@ -459,14 +473,14 @@ function ProductionPage({ state, applyState, setPendingConfirm, openDrawer }: Pa
               </select>
             </Field>
             <Field label="Unidades a producir"><input type="number" min="0" step="1" value={draft.units} onChange={(e) => setDraft({ ...draft, units: toNumber(e.target.value) })} /></Field>
-            <Field label="Número de lote"><input value={draft.lotNumber} onChange={(e) => setDraft({ ...draft, lotNumber: e.target.value })} placeholder="Ej. JM-CH-2405" /></Field>
-            <Field label="Fecha producción"><input type="date" value={draft.producedAt} onChange={(e) => setDraft({ ...draft, producedAt: e.target.value, expiry: product ? suggestedExpiryForProduct(state, product.id, e.target.value) : draft.expiry })} /></Field>
-            <Field label="Vencimiento"><input type="date" value={draft.expiry} onChange={(e) => setDraft({ ...draft, expiry: e.target.value })} /></Field>
+            <Field label="Número de lote"><input value={draft.lotNumber} onChange={(e) => setDraft({ ...draft, lotNumber: e.target.value })} placeholder="Ej.: JM-CH-2405" /></Field>
+            <Field label="Fecha producción"><input type="date" required value={draft.producedAt} onChange={(e) => setDraft({ ...draft, producedAt: e.target.value, expiry: product ? suggestedExpiryForProduct(state, product.id, e.target.value) : draft.expiry })} /></Field>
+            <Field label="Vencimiento"><input type="date" required value={draft.expiry} onChange={(e) => setDraft({ ...draft, expiry: e.target.value })} /></Field>
             <Field label="Ubicación"><input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} /></Field>
           </div>
           <Field label="Notas"><textarea rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
           <ErrorList errors={preview.errors} warnings={preview.warnings} />
-          <button className="primary wide-button" disabled={!preview.ok} onClick={confirm}>Registrar producción</button>
+          <button className="primary wide-button" disabled={dateErrors.length > 0 || !preview.ok} onClick={confirm}>Registrar producción</button>
           {draft.productId && <button className="ghost wide-button" onClick={() => openDrawer('product', draft.productId)}>Ver ficha producto</button>}
         </div>
         <div className="card sticky-card">
@@ -517,6 +531,11 @@ function ProductionConfirmation({ preview, draft }: { preview: ReturnType<typeof
 function PurchasePage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [draft, setDraft] = useState<PurchaseDraft>({ date: todayISO(), supplierId: state.suppliers.find((s) => s.active)?.id ?? '', materialId: state.materials.find((m) => m.active)?.id ?? '', quantity: 0, unitCost: 0, lotNumber: '', expiry: '', notes: '', location: 'Depósito MP' });
   const preview = useMemo(() => previewPurchase(state, draft), [state, draft]);
+  const dateErrors = [
+    ...validateRequiredDate(draft.date, 'Fecha de compra'),
+    ...(draft.expiry ? (fromISODate(draft.expiry) ? [] : ['Vencimiento: la fecha no es válida.']) : []),
+    ...(draft.expiry && fromISODate(draft.date) && fromISODate(draft.expiry) && draft.expiry <= draft.date ? ['Vencimiento: debe ser posterior a la fecha de compra.'] : [])
+  ];
   const material = state.materials.find((m) => m.id === draft.materialId);
   useEffect(() => {
     const mat = state.materials.find((m) => m.id === draft.materialId);
@@ -524,7 +543,7 @@ function PurchasePage({ state, applyState, setPendingConfirm, openDrawer }: Page
   }, [draft.materialId]);
 
   const confirm = () => {
-    if (!preview.ok) return;
+    if (dateErrors.length || !preview.ok) return;
     setPendingConfirm({
       title: 'Confirmar compra',
       label: 'Registrar compra',
@@ -556,7 +575,7 @@ function PurchasePage({ state, applyState, setPendingConfirm, openDrawer }: Page
                 {state.materials.filter((m) => m.active).map((m) => <option key={m.id} value={m.id}>{m.name} · {m.category}</option>)}
               </select>
             </Field>
-            <Field label="Fecha"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+            <Field label="Fecha"><input type="date" required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
             <Field label={`Cantidad ${material?.unit ? `(${material.unit})` : ''}`}><input type="number" min="0" step="0.01" value={draft.quantity} onChange={(e) => setDraft({ ...draft, quantity: toNumber(e.target.value) })} /></Field>
             <Field label="Costo unitario"><input type="number" min="0" step="0.0001" value={draft.unitCost} onChange={(e) => setDraft({ ...draft, unitCost: toNumber(e.target.value) })} /></Field>
             <Field label="Lote proveedor"><input value={draft.lotNumber} onChange={(e) => setDraft({ ...draft, lotNumber: e.target.value })} /></Field>
@@ -564,8 +583,8 @@ function PurchasePage({ state, applyState, setPendingConfirm, openDrawer }: Page
             <Field label="Ubicación"><input value={draft.location ?? ''} onChange={(e) => setDraft({ ...draft, location: e.target.value })} /></Field>
           </div>
           <Field label="Notas"><textarea rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
-          <ErrorList errors={preview.errors} warnings={preview.warnings} />
-          <button className="primary wide-button" disabled={!preview.ok} onClick={confirm}>Registrar compra</button>
+          <ErrorList errors={[...dateErrors, ...preview.errors]} warnings={preview.warnings} />
+          <button className="primary wide-button" disabled={dateErrors.length > 0 || !preview.ok} onClick={confirm}>Registrar compra</button>
         </div>
         <div className="card sticky-card">
           <h3>Resumen compra</h3>
@@ -606,6 +625,7 @@ function InventoryPage({ state, applyState, setPendingConfirm }: PageProps) {
   const [draft, setDraft] = useState<InventoryDraft>({ date: todayISO(), itemType: 'product', itemId: firstProduct?.id ?? '', countedQty: 0, reason: 'conteo físico', notes: '' });
   const item = draft.itemType === 'product' ? state.products.find((p) => p.id === draft.itemId) : state.materials.find((m) => m.id === draft.itemId);
   const preview = useMemo(() => previewInventoryCount(state, draft), [state, draft]);
+  const dateErrors = validateRequiredDate(draft.date, 'Fecha de ajuste');
   useEffect(() => {
     const list = draft.itemType === 'product' ? state.products : state.materials;
     const selected = list[0];
@@ -613,7 +633,7 @@ function InventoryPage({ state, applyState, setPendingConfirm }: PageProps) {
   }, [draft.itemType]);
 
   const confirm = () => {
-    if (!preview.ok) return;
+    if (dateErrors.length || !preview.ok) return;
     setPendingConfirm({
       title: 'Confirmar ajuste de inventario',
       label: 'Aplicar conteo',
@@ -632,13 +652,13 @@ function InventoryPage({ state, applyState, setPendingConfirm }: PageProps) {
           <div className="form-grid two-cols">
             <Field label="Tipo"><select value={draft.itemType} onChange={(e) => setDraft({ ...draft, itemType: e.target.value as InventoryDraft['itemType'] })}><option value="product">Producto terminado</option><option value="material">Material / insumo</option></select></Field>
             <Field label="Ítem"><select value={draft.itemId} onChange={(e) => setDraft({ ...draft, itemId: e.target.value })}>{(draft.itemType === 'product' ? state.products : state.materials).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></Field>
-            <Field label="Fecha"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
+            <Field label="Fecha"><input type="date" required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
             <Field label="Stock contado"><input type="number" min="0" step="0.01" value={draft.countedQty} onChange={(e) => setDraft({ ...draft, countedQty: toNumber(e.target.value) })} /></Field>
             <Field label="Motivo"><select value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })}>{countReasons.map((r) => <option key={r}>{r}</option>)}</select></Field>
           </div>
           <Field label="Nota / evidencia textual"><textarea rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></Field>
-          <ErrorList errors={preview.errors} warnings={preview.warnings} />
-          <button className="primary wide-button" disabled={!preview.ok} onClick={confirm}>Aplicar conteo / ajuste</button>
+          <ErrorList errors={[...dateErrors, ...preview.errors]} warnings={preview.warnings} />
+          <button className="primary wide-button" disabled={dateErrors.length > 0 || !preview.ok} onClick={confirm}>Aplicar conteo / ajuste</button>
         </div>
         <div className="card sticky-card">
           <h3>Stock actual</h3>

@@ -1,6 +1,7 @@
+import { formatDateAR, fromISODate, toISODateLocal } from './date';
 export const uid = (prefix = 'id') => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+export const todayISO = () => toISODateLocal(new Date());
 export const nowISO = () => new Date().toISOString();
 
 export function clone<T>(value: T): T {
@@ -22,16 +23,14 @@ export function qty(value: number, unit = ''): string {
 }
 
 export function dateLabel(value?: string | null): string {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return new Intl.DateTimeFormat('es-AR').format(d);
+  return formatDateAR(value);
 }
 
 export function addMonths(date: string, months: number): string {
-  const d = new Date(`${date}T00:00:00`);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const parsed = fromISODate(date);
+  if (!parsed) return date;
+  parsed.setMonth(parsed.getMonth() + months);
+  return toISODateLocal(parsed);
 }
 
 export function daysBetween(a: string, b: string): number {
