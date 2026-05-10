@@ -280,6 +280,20 @@ export interface PhysicalSnapshot {
   reason: string;
 }
 
+
+export interface ImportExportLogEntry {
+  id: string;
+  date: string;
+  user: string;
+  action: 'import' | 'export';
+  module: string;
+  file: string;
+  rows: number;
+  warnings: number;
+  errors: number;
+  detail?: string;
+}
+
 export interface AppState {
   schemaVersion: number;
   products: Product[];
@@ -296,6 +310,7 @@ export interface AppState {
   inventoryCounts: InventoryCount[];
   movements: Movement[];
   auditLog: AuditEntry[];
+  importExportLog: ImportExportLogEntry[];
   settings: Settings;
   physicalSnapshots: Record<string, PhysicalSnapshot>;
 }

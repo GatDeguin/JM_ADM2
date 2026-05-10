@@ -81,6 +81,7 @@ export function migrateState(raw: unknown): AppState {
     inventoryCounts: Array.isArray(incoming.inventoryCounts) ? incoming.inventoryCounts : base.inventoryCounts,
     movements: Array.isArray(incoming.movements) ? incoming.movements : base.movements,
     auditLog: Array.isArray(incoming.auditLog) ? incoming.auditLog : base.auditLog,
+    importExportLog: Array.isArray(incoming.importExportLog) ? incoming.importExportLog : base.importExportLog,
     settings: { ...defaultSettings, ...(incoming.settings ?? {}) },
     physicalSnapshots: incoming.physicalSnapshots ?? {}
   };

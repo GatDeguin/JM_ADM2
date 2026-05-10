@@ -1102,6 +1102,39 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
   const [destination, setDestination] = useState<ImportDestination>('clientes');
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState('');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyAction, setHistoryAction] = useState('');
+  const [historyModule, setHistoryModule] = useState('');
+
+  const registerLog = (next: AppState, entry: { action: 'import' | 'export'; module: string; file: string; rows: number; warnings?: number; errors?: number; detail?: string }) => {
+    const line = {
+      id: uid('impexp'),
+      date: nowISO(),
+      user: next.settings.currentUser,
+      action: entry.action,
+      module: entry.module,
+      file: entry.file,
+      rows: entry.rows,
+      warnings: entry.warnings ?? 0,
+      errors: entry.errors ?? 0,
+      detail: entry.detail ?? ''
+    };
+    return { ...next, importExportLog: [line, ...(next.importExportLog ?? [])] };
+  };
+
+  const runExport = (module: string, rowsCount: number, file?: string) => {
+    exportModuleCsv(state, module);
+    const next = registerLog(state, { action: 'export', module, file: file ?? `JM-${module}-${todayISO()}.csv`, rows: rowsCount });
+    applyState(next, `Exportación ${module} generada.`);
+  };
+
+  const runTemplateExport = (target: ImportDestination) => {
+    const filename = `plantilla-${target}.csv`;
+    fileDownload(filename, templateCsv(target), 'text/csv;charset=utf-8');
+    const next = registerLog(state, { action: 'export', module: `plantilla-${target}`, file: filename, rows: 1 });
+    applyState(next, `Plantilla de ${target} descargada.`);
+  };
+
   const handleFile = (file?: File) => {
     if (!file) return;
     setFileName(file.name);
@@ -1112,7 +1145,7 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
         try {
           const parsed = JSON.parse(text);
           if (parsed?.schemaVersion || parsed?.products || parsed?.clients) {
-            setPendingConfirm({ title: 'Restaurar backup JSON', label: 'Restaurar backup', danger: true, body: <p>Esto reemplazará la base local actual por el backup seleccionado. Antes de continuar, exportá un backup si necesitás conservar el estado actual.</p>, onConfirm: () => { restoreBackup(file).then((restored) => applyState(restored, 'Backup restaurado.')); } });
+            setPendingConfirm({ title: 'Restaurar backup JSON', label: 'Restaurar backup', danger: true, body: <p>Esto reemplazará la base local actual por el backup seleccionado. Antes de continuar, exportá un backup si necesitás conservar el estado actual.</p>, onConfirm: () => { restoreBackup(file).then((restored) => applyState(registerLog(restored, { action: 'import', module: 'backup', file: file.name, rows: 1, detail: 'Restore JSON completo' }), 'Backup restaurado.')); } });
             return;
           }
           const arr = Array.isArray(parsed) ? parsed : [];
@@ -1127,19 +1160,53 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
     reader.readAsText(file, 'utf-8');
   };
   const apply = () => {
-    setPendingConfirm({ title: 'Confirmar importación', label: 'Importar', body: <div><p>Destino: <b>{destination}</b></p><p>Archivo: <b>{fileName}</b></p><p>Filas a aplicar: <b>{rows.length}</b></p></div>, onConfirm: () => { const result = applyImport(state, destination, rows); applyState(result.next, `Importación aplicada: ${result.count} filas.${result.warnings.length ? ` ${result.warnings.length} advertencias.` : ''}`, result.warnings.length ? 'warn' : 'good'); setRows([]); } });
+    setPendingConfirm({ title: 'Confirmar importación', label: 'Importar', body: <div><p>Destino: <b>{destination}</b></p><p>Archivo: <b>{fileName}</b></p><p>Filas a aplicar: <b>{rows.length}</b></p></div>, onConfirm: () => { const result = applyImport(state, destination, rows); const logged = registerLog(result.next, { action: 'import', module: destination, file: fileName || 'manual', rows: result.count, warnings: result.warnings.length }); applyState(logged, `Importación aplicada: ${result.count} filas.${result.warnings.length ? ` ${result.warnings.length} advertencias.` : ''}`, result.warnings.length ? 'warn' : 'good'); setRows([]); } });
   };
+
+  const history = (state.importExportLog ?? []).filter((x) => {
+    const byAction = !historyAction || x.action === historyAction;
+    const byModule = !historyModule || x.module === historyModule;
+    const byText = !historyQuery || includesText([x.module, x.file, x.user, x.detail ?? ''].join(' '), historyQuery);
+    return byAction && byModule && byText;
+  });
+
+  const exportHistory = () => {
+    const rowsOut = history.map((h) => ({ ...h }));
+    const csv = rowsOut.length
+      ? `${Object.keys(rowsOut[0]).join(';')}\n${rowsOut.map((r) => Object.values(r).join(';')).join('\n')}`
+      : 'id;date;user;action;module;file;rows;warnings;errors;detail\n';
+    fileDownload(`JM-import-export-log-${todayISO()}.csv`, csv, 'text/csv;charset=utf-8');
+  };
+
   return (
     <Section title="Importar / Exportar" subtitle="CSV/JSON con preview, confirmación, backup completo y Excel multihoja compatible.">
+      <div className="card">
+        <h3>Guía rápida</h3>
+        <ul>
+          <li><b>Campos obligatorios:</b> en compras se exige proveedor, material, cantidad y costo unitario. En el resto, se recomienda ID + nombre para evitar duplicados.</li>
+          <li><b>Formatos esperados:</b> CSV separado por <code>;</code> (también admite coma/tab), fechas en <code>YYYY-MM-DD</code>, números sin símbolo monetario.</li>
+          <li><b>Orden recomendado:</b> 1) proveedores, 2) materiales, 3) productos, 4) clientes, 5) compras.</li>
+        </ul>
+      </div>
       <div className="grid two">
         <div className="card form-card">
           <Field label="Destino"><select value={destination} onChange={(e) => setDestination(e.target.value as ImportDestination)}>{['clientes', 'productos', 'materiales', 'proveedores', 'compras'].map((d) => <option key={d}>{d}</option>)}</select></Field>
           <Field label="Archivo CSV o JSON"><input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => handleFile(e.target.files?.[0])} /></Field>
-          <div className="button-row"><button className="ghost" onClick={() => fileDownload(`plantilla-${destination}.csv`, templateCsv(destination), 'text/csv;charset=utf-8')}>Descargar plantilla</button><button className="primary" disabled={!rows.length} onClick={apply}>Importar con confirmación</button></div>
+          <div className="button-row"><button className="ghost" onClick={() => runTemplateExport(destination)}>Descargar plantilla</button><button className="primary" disabled={!rows.length} onClick={apply}>Importar con confirmación</button></div>
           <h3>Preview</h3>
           {rows.length ? <SmartTable rows={rows.map((r, i) => ({ id: String(i), ...r }))} dense maxRows={10} columns={Object.keys(rows[0] ?? {}).slice(0, 8).map((key) => ({ key, header: key }))} /> : <EmptyState title="Sin archivo" text="Cargá un CSV/JSON para ver la previsualización antes de aplicar." />}
         </div>
-        <div className="card"><h3>Exportación</h3><div className="export-grid"><button className="primary" onClick={() => fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8')}>Backup JSON completo</button><button className="primary" onClick={() => exportFullExcel(state)}>Excel completo multihoja</button><button className="ghost" onClick={() => fileDownload(`JM-Stock-Suite-${todayISO()}.xls`, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8')}>Descargar .xls XML</button><button className="ghost" onClick={() => exportModuleCsv(state, 'ventas')}>Ventas CSV</button><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Productos CSV</button><button className="ghost" onClick={() => exportModuleCsv(state, 'clientes')}>Clientes CSV</button></div></div>
+        <div className="card"><h3>Exportación</h3><div className="export-grid"><button className="primary" onClick={() => { fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8'); applyState(registerLog(state, { action: 'export', module: 'backup', file: `JM-Stock-Backup-${todayISO()}.json`, rows: 1 }), 'Backup JSON exportado.'); }}>Backup JSON completo</button><button className="primary" onClick={() => { exportFullExcel(state); applyState(registerLog(state, { action: 'export', module: 'excel', file: `JM-Stock-Suite-${todayISO()}.xls`, rows: 1 }), 'Excel completo exportado.'); }}>Excel completo multihoja</button><button className="ghost" onClick={() => { fileDownload(`JM-Stock-Suite-${todayISO()}.xls`, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8'); applyState(registerLog(state, { action: 'export', module: 'excel-xml', file: `JM-Stock-Suite-${todayISO()}.xls`, rows: 1 }), '.xls XML exportado.'); }}>Descargar .xls XML</button><button className="ghost" onClick={() => runExport('ventas', state.sales.length)}>Ventas CSV</button><button className="ghost" onClick={() => runExport('productos', state.products.length)}>Productos CSV</button><button className="ghost" onClick={() => runExport('clientes', state.clients.length)}>Clientes CSV</button><button className="ghost" onClick={() => runExport('proveedores', state.suppliers.length)}>Proveedores CSV</button><button className="ghost" onClick={() => runExport('compras', state.purchases.length)}>Compras CSV</button><button className="ghost" onClick={() => runExport('materiales', state.materials.length)}>Materiales CSV</button></div></div>
+      </div>
+      <div className="card">
+        <header className="card-head"><h3>Historial import/export</h3><button className="ghost" onClick={exportHistory}>Exportar historial</button></header>
+        <div className="form-grid four-cols">
+          <input className="search" placeholder="Buscar en módulo/archivo/usuario…" value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} />
+          <select value={historyAction} onChange={(e) => setHistoryAction(e.target.value)}><option value="">Acción</option><option value="import">Import</option><option value="export">Export</option></select>
+          <select value={historyModule} onChange={(e) => setHistoryModule(e.target.value)}><option value="">Módulo</option>{Array.from(new Set((state.importExportLog ?? []).map((x) => x.module))).map((m) => <option key={m} value={m}>{m}</option>)}</select>
+          <button className="ghost" onClick={() => { setHistoryQuery(''); setHistoryAction(''); setHistoryModule(''); }}>Borrar filtros</button>
+        </div>
+        <SmartTable rows={history} dense maxRows={30} columns={[{ key: 'date', header: 'Fecha', render: (r) => dateLabel(r.date) }, { key: 'user', header: 'Usuario' }, { key: 'action', header: 'Acción' }, { key: 'module', header: 'Módulo' }, { key: 'file', header: 'Archivo' }, { key: 'rows', header: 'Filas' }, { key: 'warnings', header: 'Warnings' }, { key: 'errors', header: 'Errores' }]} />
       </div>
     </Section>
   );
