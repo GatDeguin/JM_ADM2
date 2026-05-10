@@ -51,6 +51,17 @@ function ErrorList({ errors, warnings }: { errors: string[]; warnings?: string[]
   );
 }
 
+
+function isValidEmail(value: string): boolean {
+  if (!value.trim()) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidPhone(value: string): boolean {
+  if (!value.trim()) return true;
+  return /^[0-9+()\-\s]{6,}$/.test(value.trim());
+}
+
 function validateRequiredDate(value: string, label: string): string[] {
   if (!value) return [`${label}: la fecha es obligatoria.`];
   if (!fromISODate(value)) return [`${label}: la fecha no es válida.`];
@@ -775,6 +786,7 @@ function ClientsPage({ state, applyState, setPendingConfirm, openDrawer }: PageP
   const [query, setQuery] = useState('');
   const [form, setForm] = useState({ name: '', phone: '', email: '', province: '', city: '', segment: 'minorista' });
   const [editing, setEditing] = useState<Client | null>(null);
+  const [editErrors, setEditErrors] = useState<string[]>([]);
   const rows = state.clients.filter((c) => includesText(`${c.name} ${c.phone} ${c.city} ${c.province} ${c.segment}`, query));
   const save = () => {
     if (!form.name.trim()) return;
@@ -789,22 +801,38 @@ function ClientsPage({ state, applyState, setPendingConfirm, openDrawer }: PageP
     applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === client.id ? updated : c) }, movements: [], auditEntries }), 'Estado de cliente actualizado.');
   };
   const saveEdit = () => {
-    if (!editing || !editing.name.trim()) return;
+    if (!editing) return;
+    const errors: string[] = [];
+    if (!editing.name.trim()) errors.push('Nombre: es obligatorio.');
+    if (!isValidEmail(editing.email)) errors.push('Email: formato inválido.');
+    if (!isValidPhone(editing.phone)) errors.push('Teléfono: formato inválido.');
+    if (errors.length) { setEditErrors(errors); return; }
     const auditEntries = [audit({ entity: 'clients', entityId: editing.id, field: 'edición', before: state.clients.find((c) => c.id === editing.id), after: editing, reason: 'Edición manual cliente', origin: 'manual', user: state.settings.currentUser })];
     applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === editing.id ? editing : c) }, movements: [], auditEntries }), 'Cliente actualizado.');
     setEditing(null);
+    setEditErrors([]);
   };
-  const deleteClient = (client: Client) => setPendingConfirm({
-    title: 'Desactivar cliente',
-    label: 'Desactivar',
-    danger: true,
-    body: <p>Esta acción puede afectar reportes históricos y ventas asociadas. Se desactivará el cliente para preservar trazabilidad.</p>,
-    onConfirm: () => {
-      const updated = { ...client, status: 'inactive' as const };
-      const auditEntries = [audit({ entity: 'clients', entityId: client.id, field: 'status', before: client.status, after: updated.status, reason: 'Baja lógica cliente con historial', origin: 'manual', user: state.settings.currentUser })];
-      applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === client.id ? updated : c) }, movements: [], auditEntries }), 'Cliente desactivado.');
-    }
-  });
+  const deleteClient = (client: Client) => {
+    const hasReferences = state.sales.some((s) => s.clientId === client.id) || state.orders.some((o) => o.clientId === client.id);
+    setPendingConfirm({
+      title: hasReferences ? 'Desactivar cliente' : 'Eliminar cliente',
+      label: hasReferences ? 'Desactivar' : 'Eliminar',
+      danger: true,
+      body: <p>{hasReferences
+        ? 'El cliente tiene ventas u órdenes históricas. Se realizará una baja lógica para preservar la trazabilidad.'
+        : 'El cliente no tiene ventas ni órdenes asociadas. Se eliminará definitivamente.'}</p>,
+      onConfirm: () => {
+        if (hasReferences) {
+          const updated = { ...client, status: 'inactive' as const };
+          const auditEntries = [audit({ entity: 'clients', entityId: client.id, field: 'status', before: client.status, after: updated.status, reason: 'Baja lógica cliente con historial', origin: 'manual', user: state.settings.currentUser })];
+          applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === client.id ? updated : c) }, movements: [], auditEntries }), 'Cliente desactivado por referencias históricas.');
+        } else {
+          const auditEntries = [audit({ entity: 'clients', entityId: client.id, field: 'hard-delete', before: client, after: '', reason: 'Eliminación física cliente sin referencias', origin: 'manual', user: state.settings.currentUser })];
+          applyState(commitOperation(state, { patch: { clients: state.clients.filter((c) => c.id !== client.id) }, movements: [], auditEntries }), 'Cliente eliminado.');
+        }
+      }
+    });
+  };
   return (
     <Section title="Clientes" subtitle="Alta, edición, deuda, ticket promedio, productos favoritos, última compra e historial.">
       <div className="card form-card compact-form"><div className="form-grid seven-cols">
@@ -822,11 +850,12 @@ function ClientsPage({ state, applyState, setPendingConfirm, openDrawer }: PageP
           { key: 'name', header: 'Cliente' }, { key: 'phone', header: 'Teléfono' }, { key: 'city', header: 'Ciudad' }, { key: 'province', header: 'Provincia' }, { key: 'segment', header: 'Segmento' },
           { key: 'lastPurchase', header: 'Última compra', render: (c) => dateLabel(c.lastPurchase) },
           { key: 'status', header: 'Estado', render: (c) => <button className="ghost" onClick={(event) => { event.stopPropagation(); toggle(c); }}><Badge label={c.status} tone={c.status === 'active' ? 'good' : 'neutral'} /></button> },
-          { key: 'actions', header: 'Acciones', sortable: false, render: (c) => <RowActions onEdit={() => setEditing(c)} onDelete={() => deleteClient(c)} deleteLabel="Desactivar" /> }
+          { key: 'actions', header: 'Acciones', sortable: false, render: (c) => <RowActions onEdit={() => { setEditing(c); setEditErrors([]); }} onDelete={() => deleteClient(c)} deleteLabel={(state.sales.some((s) => s.clientId === c.id) || state.orders.some((o) => o.clientId === c.id)) ? 'Desactivar' : 'Eliminar'} /> }
         ]} />
       </div>
       {editing && (
-        <Modal title="Editar cliente" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}>
+        <Modal title="Editar cliente" onClose={() => { setEditing(null); setEditErrors([]); }} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}>
+          <ErrorList errors={editErrors} />
           <div className="form-grid two-cols">
             <Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
             <Field label="Email"><input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
@@ -842,6 +871,7 @@ function ClientsPage({ state, applyState, setPendingConfirm, openDrawer }: PageP
 function SuppliersPage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [form, setForm] = useState({ name: '', contact: '', phone: '', email: '', address: '' });
   const [editing, setEditing] = useState<Supplier | null>(null);
+  const [editErrors, setEditErrors] = useState<string[]>([]);
   const save = () => {
     if (!form.name.trim()) return;
     const supplier: Supplier = { id: uid('sup'), name: form.name, contact: form.contact, phone: form.phone, email: form.email, address: form.address, notes: '', active: true };
@@ -850,22 +880,38 @@ function SuppliersPage({ state, applyState, setPendingConfirm, openDrawer }: Pag
     setForm({ name: '', contact: '', phone: '', email: '', address: '' });
   };
   const saveEdit = () => {
-    if (!editing || !editing.name.trim()) return;
+    if (!editing) return;
+    const errors: string[] = [];
+    if (!editing.name.trim()) errors.push('Nombre: es obligatorio.');
+    if (!isValidEmail(editing.email)) errors.push('Email: formato inválido.');
+    if (!isValidPhone(editing.phone)) errors.push('Teléfono: formato inválido.');
+    if (errors.length) { setEditErrors(errors); return; }
     const auditEntries = [audit({ entity: 'suppliers', entityId: editing.id, field: 'edición', before: state.suppliers.find((s) => s.id === editing.id), after: editing, reason: 'Edición manual proveedor', origin: 'manual', user: state.settings.currentUser })];
     applyState(commitOperation(state, { patch: { suppliers: state.suppliers.map((s) => s.id === editing.id ? editing : s) }, movements: [], auditEntries }), 'Proveedor actualizado.');
     setEditing(null);
+    setEditErrors([]);
   };
-  const deleteSupplier = (supplier: Supplier) => setPendingConfirm({
-    title: 'Desactivar proveedor',
-    label: 'Desactivar',
-    danger: true,
-    body: <p>Esta acción puede afectar compras históricas y trazabilidad de lotes. Se desactivará el proveedor.</p>,
-    onConfirm: () => {
-      const updated = { ...supplier, active: false };
-      const auditEntries = [audit({ entity: 'suppliers', entityId: supplier.id, field: 'active', before: supplier.active, after: updated.active, reason: 'Baja lógica proveedor con historial', origin: 'manual', user: state.settings.currentUser })];
-      applyState(commitOperation(state, { patch: { suppliers: state.suppliers.map((s) => s.id === supplier.id ? updated : s) }, movements: [], auditEntries }), 'Proveedor desactivado.');
-    }
-  });
+  const deleteSupplier = (supplier: Supplier) => {
+    const hasReferences = state.purchases.some((p) => p.supplierId === supplier.id);
+    setPendingConfirm({
+      title: hasReferences ? 'Desactivar proveedor' : 'Eliminar proveedor',
+      label: hasReferences ? 'Desactivar' : 'Eliminar',
+      danger: true,
+      body: <p>{hasReferences
+        ? 'El proveedor tiene compras históricas. Se realizará una baja lógica para preservar trazabilidad de costos y lotes.'
+        : 'El proveedor no tiene compras asociadas. Se eliminará definitivamente.'}</p>,
+      onConfirm: () => {
+        if (hasReferences) {
+          const updated = { ...supplier, active: false };
+          const auditEntries = [audit({ entity: 'suppliers', entityId: supplier.id, field: 'active', before: supplier.active, after: updated.active, reason: 'Baja lógica proveedor con historial', origin: 'manual', user: state.settings.currentUser })];
+          applyState(commitOperation(state, { patch: { suppliers: state.suppliers.map((s) => s.id === supplier.id ? updated : s) }, movements: [], auditEntries }), 'Proveedor desactivado por referencias históricas.');
+        } else {
+          const auditEntries = [audit({ entity: 'suppliers', entityId: supplier.id, field: 'hard-delete', before: supplier, after: '', reason: 'Eliminación física proveedor sin referencias', origin: 'manual', user: state.settings.currentUser })];
+          applyState(commitOperation(state, { patch: { suppliers: state.suppliers.filter((s) => s.id !== supplier.id) }, movements: [], auditEntries }), 'Proveedor eliminado.');
+        }
+      }
+    });
+  };
   return (
     <Section title="Proveedores" subtitle="Datos, historial de compras, insumos comprados y costo histórico por proveedor.">
       <div className="card form-card compact-form"><div className="form-grid six-cols">
@@ -878,9 +924,9 @@ function SuppliersPage({ state, applyState, setPendingConfirm, openDrawer }: Pag
       </div></div>
       <div className="card">
         <header className="card-head"><h3>Listado de proveedores</h3><button className="ghost" onClick={() => exportModuleCsv(state, 'proveedores')}>Exportar CSV</button></header>
-        <SmartTable rows={state.suppliers} onRowClick={(s) => openDrawer('supplier', s.id)} columns={[{ key: 'name', header: 'Proveedor' }, { key: 'contact', header: 'Contacto' }, { key: 'phone', header: 'Teléfono' }, { key: 'email', header: 'Email' }, { key: 'active', header: 'Estado', render: (s) => <Badge label={s.active ? 'activo' : 'inactivo'} tone={s.active ? 'good' : 'neutral'} /> }, { key: 'actions', header: 'Acciones', sortable: false, render: (s) => <RowActions onEdit={() => setEditing(s)} onDelete={() => deleteSupplier(s)} deleteLabel="Desactivar" /> }]} />
+        <SmartTable rows={state.suppliers} onRowClick={(s) => openDrawer('supplier', s.id)} columns={[{ key: 'name', header: 'Proveedor' }, { key: 'contact', header: 'Contacto' }, { key: 'phone', header: 'Teléfono' }, { key: 'email', header: 'Email' }, { key: 'active', header: 'Estado', render: (s) => <Badge label={s.active ? 'activo' : 'inactivo'} tone={s.active ? 'good' : 'neutral'} /> }, { key: 'actions', header: 'Acciones', sortable: false, render: (s) => <RowActions onEdit={() => { setEditing(s); setEditErrors([]); }} onDelete={() => deleteSupplier(s)} deleteLabel={state.purchases.some((p) => p.supplierId === s.id) ? 'Desactivar' : 'Eliminar'} /> }]} />
       </div>
-      {editing && <Modal title="Editar proveedor" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}><div className="form-grid two-cols"><Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field><Field label="Contacto"><input value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field><Field label="Teléfono"><input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field><Field label="Email"><input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field></div></Modal>}
+      {editing && <Modal title="Editar proveedor" onClose={() => { setEditing(null); setEditErrors([]); }} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}><ErrorList errors={editErrors} /><div className="form-grid two-cols"><Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field><Field label="Contacto"><input value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field><Field label="Teléfono"><input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field><Field label="Email"><input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field></div></Modal>}
     </Section>
   );
 }
