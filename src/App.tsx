@@ -127,7 +127,10 @@ export default function App() {
   }
 
   const openDrawer = (type: string, id: string) => setDrawer({ type, id });
-  const exportSuite = () => exportFullExcel(state);
+  const exportSuite = () => {
+    const result = exportFullExcel(state);
+    if (!result.ok) notify({ text: 'La descarga fue bloqueada. Habilitá descargas automáticas o abrí la app en un navegador no embebido.', tone: 'warn' });
+  };
 
   return (
     <div className="app-shell">
@@ -139,7 +142,10 @@ export default function App() {
         <button className="command-button" onClick={() => setPaletteOpen(true)}>⌘K Paleta de comandos</button>
       </aside>
       <main className="workspace">
-        <TopBar state={state} onExport={exportSuite} onBackup={() => fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8')} />
+        <TopBar state={state} onExport={exportSuite} onBackup={() => {
+          const result = fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8');
+          if (!result.ok) notify({ text: 'La descarga fue bloqueada. Habilitá descargas automáticas o abrí la app en un navegador no embebido.', tone: 'warn' });
+        }} />
         {renderPage(page, state, applyState, setPendingConfirm, openDrawer, setPage)}
       </main>
       {drawer && <EntityDrawer state={state} drawer={drawer} onClose={() => setDrawer(null)} onOpenDrawer={openDrawer} />}
@@ -1183,15 +1189,26 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
   };
 
   const runExport = (module: string, rowsCount: number, file?: string) => {
-    exportModuleCsv(state, module);
-    const next = registerLog(state, { action: 'export', module, file: file ?? `JM-${module}-${todayISO()}.csv`, rows: rowsCount });
+    const exportFile = file ?? `JM-${module}-${todayISO()}.csv`;
+    const result = exportModuleCsv(state, module);
+    if (!result.ok) {
+      const failed = registerLog(state, { action: 'export', module, file: exportFile, rows: rowsCount, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` });
+      applyState(failed, 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn');
+      return;
+    }
+    const next = registerLog(state, { action: 'export', module, file: exportFile, rows: rowsCount, detail: result.method === 'new_tab' ? 'Fallback: apertura en nueva pestaña' : '' });
     applyState(next, `Exportación ${module} generada.`);
   };
 
   const runTemplateExport = (target: ImportDestination) => {
     const filename = `plantilla-${target}.csv`;
-    fileDownload(filename, templateCsv(target), 'text/csv;charset=utf-8');
-    const next = registerLog(state, { action: 'export', module: `plantilla-${target}`, file: filename, rows: 1 });
+    const result = fileDownload(filename, templateCsv(target), 'text/csv;charset=utf-8');
+    if (!result.ok) {
+      const failed = registerLog(state, { action: 'export', module: `plantilla-${target}`, file: filename, rows: 1, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` });
+      applyState(failed, 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn');
+      return;
+    }
+    const next = registerLog(state, { action: 'export', module: `plantilla-${target}`, file: filename, rows: 1, detail: result.method === 'new_tab' ? 'Fallback: apertura en nueva pestaña' : '' });
     applyState(next, `Plantilla de ${target} descargada.`);
   };
 
@@ -1235,7 +1252,11 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
     const csv = rowsOut.length
       ? `${Object.keys(rowsOut[0]).join(';')}\n${rowsOut.map((r) => Object.values(r).join(';')).join('\n')}`
       : 'id;date;user;action;module;file;rows;warnings;errors;detail\n';
-    fileDownload(`JM-import-export-log-${todayISO()}.csv`, csv, 'text/csv;charset=utf-8');
+    const filename = `JM-import-export-log-${todayISO()}.csv`;
+    const result = fileDownload(filename, csv, 'text/csv;charset=utf-8');
+    if (!result.ok) {
+      applyState(registerLog(state, { action: 'export', module: 'historial-import-export', file: filename, rows: rowsOut.length, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` }), 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn');
+    }
   };
 
   return (
@@ -1256,7 +1277,7 @@ function ImportExportPage({ state, applyState, setPendingConfirm }: PageProps) {
           <h3>Preview</h3>
           {rows.length ? <SmartTable rows={rows.map((r, i) => ({ id: String(i), ...r }))} dense maxRows={10} columns={Object.keys(rows[0] ?? {}).slice(0, 8).map((key) => ({ key, header: key }))} /> : <EmptyState title="Sin archivo" text="Cargá un CSV/JSON para ver la previsualización antes de aplicar." />}
         </div>
-        <div className="card"><h3>Exportación</h3><div className="export-grid"><button className="primary" onClick={() => { fileDownload(`JM-Stock-Backup-${todayISO()}.json`, exportBackup(state), 'application/json;charset=utf-8'); applyState(registerLog(state, { action: 'export', module: 'backup', file: `JM-Stock-Backup-${todayISO()}.json`, rows: 1 }), 'Backup JSON exportado.'); }}>Backup JSON completo</button><button className="primary" onClick={() => { exportFullExcel(state); applyState(registerLog(state, { action: 'export', module: 'excel', file: `JM-Stock-Suite-${todayISO()}.xls`, rows: 1 }), 'Excel completo exportado.'); }}>Excel completo multihoja</button><button className="ghost" onClick={() => { fileDownload(`JM-Stock-Suite-${todayISO()}.xls`, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8'); applyState(registerLog(state, { action: 'export', module: 'excel-xml', file: `JM-Stock-Suite-${todayISO()}.xls`, rows: 1 }), '.xls XML exportado.'); }}>Descargar .xls XML</button><button className="ghost" onClick={() => runExport('ventas', state.sales.length)}>Ventas CSV</button><button className="ghost" onClick={() => runExport('productos', state.products.length)}>Productos CSV</button><button className="ghost" onClick={() => runExport('clientes', state.clients.length)}>Clientes CSV</button><button className="ghost" onClick={() => runExport('proveedores', state.suppliers.length)}>Proveedores CSV</button><button className="ghost" onClick={() => runExport('compras', state.purchases.length)}>Compras CSV</button><button className="ghost" onClick={() => runExport('materiales', state.materials.length)}>Materiales CSV</button></div></div>
+        <div className="card"><h3>Exportación</h3><div className="export-grid"><button className="primary" onClick={() => { const file = `JM-Stock-Backup-${todayISO()}.json`; const result = fileDownload(file, exportBackup(state), 'application/json;charset=utf-8'); if (!result.ok) { applyState(registerLog(state, { action: 'export', module: 'backup', file, rows: 1, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` }), 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn'); return; } applyState(registerLog(state, { action: 'export', module: 'backup', file, rows: 1, detail: result.method === 'new_tab' ? 'Fallback: apertura en nueva pestaña' : '' }), 'Backup JSON exportado.'); }}>Backup JSON completo</button><button className="primary" onClick={() => { const file = `JM-Stock-Suite-${todayISO()}.xls`; const result = exportFullExcel(state); if (!result.ok) { applyState(registerLog(state, { action: 'export', module: 'excel', file, rows: 1, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` }), 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn'); return; } applyState(registerLog(state, { action: 'export', module: 'excel', file, rows: 1, detail: result.method === 'new_tab' ? 'Fallback: apertura en nueva pestaña' : '' }), 'Excel completo exportado.'); }}>Excel completo multihoja</button><button className="ghost" onClick={() => { const file = `JM-Stock-Suite-${todayISO()}.xls`; const result = fileDownload(file, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8'); if (!result.ok) { applyState(registerLog(state, { action: 'export', module: 'excel-xml', file, rows: 1, errors: 1, detail: `Descarga bloqueada: ${result.reason ?? 'sin detalle'}` }), 'Descarga bloqueada. Habilitá descargas automáticas o usá un navegador no embebido.', 'warn'); return; } applyState(registerLog(state, { action: 'export', module: 'excel-xml', file, rows: 1, detail: result.method === 'new_tab' ? 'Fallback: apertura en nueva pestaña' : '' }), '.xls XML exportado.'); }}>Descargar .xls XML</button><button className="ghost" onClick={() => runExport('ventas', state.sales.length)}>Ventas CSV</button><button className="ghost" onClick={() => runExport('productos', state.products.length)}>Productos CSV</button><button className="ghost" onClick={() => runExport('clientes', state.clients.length)}>Clientes CSV</button><button className="ghost" onClick={() => runExport('proveedores', state.suppliers.length)}>Proveedores CSV</button><button className="ghost" onClick={() => runExport('compras', state.purchases.length)}>Compras CSV</button><button className="ghost" onClick={() => runExport('materiales', state.materials.length)}>Materiales CSV</button></div></div>
       </div>
       <div className="card">
         <header className="card-head"><h3>Historial import/export</h3><button className="ghost" onClick={exportHistory}>Exportar historial</button></header>
