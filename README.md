@@ -53,3 +53,31 @@ npm run build
 ```
 
 Además, el módulo Auditoría ejecuta tests internos de FEFO, validaciones, exportación, integridad y movimientos/auditoría.
+
+## Flujo Importar / Exportar
+
+### Flujo recomendado de importación
+
+1. Descargar plantilla por destino desde **Importar/Exportar** (clientes, productos, materiales, proveedores o compras).
+2. Completar CSV respetando encabezados y formato de fechas `YYYY-MM-DD`.
+3. Importar en orden sugerido para minimizar warnings:
+   - proveedores
+   - materiales
+   - productos
+   - clientes
+   - compras
+4. Revisar previsualización antes de confirmar.
+5. Confirmar importación y validar advertencias.
+
+### Historial y trazabilidad
+
+- Cada importación/exportación se registra en `state.importExportLog` con fecha, usuario, módulo, archivo, filas y conteo de warnings/errores.
+- Desde la tabla de historial en **Importar/Exportar** se puede filtrar por acción, módulo y texto, y exportar el historial a CSV.
+
+### Errores frecuentes
+
+- **Compra omitida por material/proveedor inexistente**: importar primero proveedores y materiales con IDs consistentes.
+- **Cantidad o costo inválidos**: asegurar `cantidad > 0` y `costo unitario >= 0`.
+- **Sin filas en preview**: verificar separador (`;`, `,` o tab) y encabezados en primera fila.
+- **Fechas no válidas**: usar formato ISO `YYYY-MM-DD`.
+- **Restauración JSON inesperada**: exportar backup antes de restaurar para mantener punto de recuperación.

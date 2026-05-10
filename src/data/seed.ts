@@ -19215,6 +19215,7 @@ export const seedState: AppState = {
       "origin": "importación"
     }
   ],
+  "importExportLog": [],
   "settings": {
     "currentUser": "JM Admin",
     "directEditLocked": true,
