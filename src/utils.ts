@@ -76,16 +76,38 @@ export function parseMl(size: string): number {
   return 0;
 }
 
-export function fileDownload(filename: string, content: string | Blob, type = 'text/plain;charset=utf-8'): void {
-  const blob = content instanceof Blob ? content : new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 500);
+export interface FileDownloadResult {
+  ok: boolean;
+  method: 'direct' | 'new_tab' | 'none';
+  reason?: string;
+}
+
+export function fileDownload(filename: string, content: string | Blob, type = 'text/plain;charset=utf-8'): FileDownloadResult {
+  try {
+    const blob = content instanceof Blob ? content : new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    let openedInNewTab = false;
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      const popup = window.open(url, '_blank', 'noopener,noreferrer');
+      openedInNewTab = Boolean(popup);
+      if (!openedInNewTab) {
+        URL.revokeObjectURL(url);
+        return { ok: false, method: 'none', reason: 'Descarga/popup bloqueado por el navegador.' };
+      }
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return { ok: true, method: openedInNewTab ? 'new_tab' : 'direct' };
+  } catch (error) {
+    return { ok: false, method: 'none', reason: error instanceof Error ? error.message : 'Error desconocido al descargar archivo.' };
+  }
 }
 
 export function csvEscape(value: unknown): string {

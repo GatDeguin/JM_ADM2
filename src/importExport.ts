@@ -1,6 +1,6 @@
 import type { AppState, AuditEntry, Client, Material, Movement, Product, Purchase, Supplier } from './types';
 import { audit, commitOperation, createMovement } from './engine';
-import { csvEscape, fileDownload, nowISO, parseMl, safeJson, slug, toNumber, uid } from './utils';
+import { csvEscape, FileDownloadResult, fileDownload, nowISO, parseMl, safeJson, slug, toNumber, uid } from './utils';
 
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -261,11 +261,11 @@ ${sheets.map(([name, rows]) => sheetXml(name, rows)).join('\n')}
 </Workbook>`;
 }
 
-export function exportFullExcel(state: AppState): void {
-  fileDownload(`JM-Stock-Suite-${new Date().toISOString().slice(0, 10)}.xls`, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8');
+export function exportFullExcel(state: AppState): FileDownloadResult {
+  return fileDownload(`JM-Stock-Suite-${new Date().toISOString().slice(0, 10)}.xls`, buildExcelXml(state), 'application/vnd.ms-excel;charset=utf-8');
 }
 
-export function exportModuleCsv(state: AppState, module: string): void {
+export function exportModuleCsv(state: AppState, module: string): FileDownloadResult {
   const map: Record<string, Record<string, unknown>[]> = {
     productos: state.products as unknown as Record<string, unknown>[],
     materiales: state.materials as unknown as Record<string, unknown>[],
@@ -278,7 +278,7 @@ export function exportModuleCsv(state: AppState, module: string): void {
     auditoria: state.auditLog as unknown as Record<string, unknown>[]
   };
   const rows = map[module] ?? [];
-  fileDownload(`JM-${module}-${nowISO().slice(0, 10)}.csv`, objectsToCsv(rows), 'text/csv;charset=utf-8');
+  return fileDownload(`JM-${module}-${nowISO().slice(0, 10)}.csv`, objectsToCsv(rows), 'text/csv;charset=utf-8');
 }
 
 export function templateCsv(destination: ImportDestination): string {
