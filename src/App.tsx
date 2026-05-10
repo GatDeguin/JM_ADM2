@@ -248,6 +248,15 @@ interface PageProps {
   setPage: (page: string) => void;
 }
 
+function RowActions({ onEdit, onDelete, deleteLabel }: { onEdit: () => void; onDelete: () => void; deleteLabel: string }) {
+  return (
+    <div className="inline-actions">
+      <button className="ghost" onClick={(event) => { event.stopPropagation(); onEdit(); }}>Editar</button>
+      <button className="danger ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>{deleteLabel}</button>
+    </div>
+  );
+}
+
 function SalesPage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [draft, setDraft] = useState<SaleDraft>({ date: todayISO(), clientId: '', lines: [], orderDiscountPct: 0, orderDiscountAmount: 0, paymentMethod: 'efectivo', amountPaid: 0, notes: '' });
   const [mode, setMode] = useState<'product' | 'combo'>('product');
@@ -758,9 +767,10 @@ function MaterialsPage({ state, applyState, openDrawer }: PageProps) {
   );
 }
 
-function ClientsPage({ state, applyState, openDrawer }: PageProps) {
+function ClientsPage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [query, setQuery] = useState('');
   const [form, setForm] = useState({ name: '', phone: '', email: '', province: '', city: '', segment: 'minorista' });
+  const [editing, setEditing] = useState<Client | null>(null);
   const rows = state.clients.filter((c) => includesText(`${c.name} ${c.phone} ${c.city} ${c.province} ${c.segment}`, query));
   const save = () => {
     if (!form.name.trim()) return;
@@ -774,6 +784,23 @@ function ClientsPage({ state, applyState, openDrawer }: PageProps) {
     const auditEntries = [audit({ entity: 'clients', entityId: client.id, field: 'status', before: client.status, after: updated.status, reason: 'Cambio manual estado cliente', origin: 'manual', user: state.settings.currentUser })];
     applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === client.id ? updated : c) }, movements: [], auditEntries }), 'Estado de cliente actualizado.');
   };
+  const saveEdit = () => {
+    if (!editing || !editing.name.trim()) return;
+    const auditEntries = [audit({ entity: 'clients', entityId: editing.id, field: 'edición', before: state.clients.find((c) => c.id === editing.id), after: editing, reason: 'Edición manual cliente', origin: 'manual', user: state.settings.currentUser })];
+    applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === editing.id ? editing : c) }, movements: [], auditEntries }), 'Cliente actualizado.');
+    setEditing(null);
+  };
+  const deleteClient = (client: Client) => setPendingConfirm({
+    title: 'Desactivar cliente',
+    label: 'Desactivar',
+    danger: true,
+    body: <p>Esta acción puede afectar reportes históricos y ventas asociadas. Se desactivará el cliente para preservar trazabilidad.</p>,
+    onConfirm: () => {
+      const updated = { ...client, status: 'inactive' as const };
+      const auditEntries = [audit({ entity: 'clients', entityId: client.id, field: 'status', before: client.status, after: updated.status, reason: 'Baja lógica cliente con historial', origin: 'manual', user: state.settings.currentUser })];
+      applyState(commitOperation(state, { patch: { clients: state.clients.map((c) => c.id === client.id ? updated : c) }, movements: [], auditEntries }), 'Cliente desactivado.');
+    }
+  });
   return (
     <Section title="Clientes" subtitle="Alta, edición, deuda, ticket promedio, productos favoritos, última compra e historial.">
       <div className="card form-card compact-form"><div className="form-grid seven-cols">
@@ -790,15 +817,27 @@ function ClientsPage({ state, applyState, openDrawer }: PageProps) {
         <SmartTable rows={rows} onRowClick={(c) => openDrawer('client', c.id)} columns={[
           { key: 'name', header: 'Cliente' }, { key: 'phone', header: 'Teléfono' }, { key: 'city', header: 'Ciudad' }, { key: 'province', header: 'Provincia' }, { key: 'segment', header: 'Segmento' },
           { key: 'lastPurchase', header: 'Última compra', render: (c) => dateLabel(c.lastPurchase) },
-          { key: 'status', header: 'Estado', render: (c) => <button className="ghost" onClick={(event) => { event.stopPropagation(); toggle(c); }}><Badge label={c.status} tone={c.status === 'active' ? 'good' : 'neutral'} /></button> }
+          { key: 'status', header: 'Estado', render: (c) => <button className="ghost" onClick={(event) => { event.stopPropagation(); toggle(c); }}><Badge label={c.status} tone={c.status === 'active' ? 'good' : 'neutral'} /></button> },
+          { key: 'actions', header: 'Acciones', sortable: false, render: (c) => <RowActions onEdit={() => setEditing(c)} onDelete={() => deleteClient(c)} deleteLabel="Desactivar" /> }
         ]} />
       </div>
+      {editing && (
+        <Modal title="Editar cliente" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}>
+          <div className="form-grid two-cols">
+            <Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
+            <Field label="Email"><input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
+            <Field label="Teléfono"><input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field>
+            <Field label="Ciudad"><input value={editing.city} onChange={(e) => setEditing({ ...editing, city: e.target.value })} /></Field>
+          </div>
+        </Modal>
+      )}
     </Section>
   );
 }
 
-function SuppliersPage({ state, applyState, openDrawer }: PageProps) {
+function SuppliersPage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [form, setForm] = useState({ name: '', contact: '', phone: '', email: '', address: '' });
+  const [editing, setEditing] = useState<Supplier | null>(null);
   const save = () => {
     if (!form.name.trim()) return;
     const supplier: Supplier = { id: uid('sup'), name: form.name, contact: form.contact, phone: form.phone, email: form.email, address: form.address, notes: '', active: true };
@@ -806,6 +845,23 @@ function SuppliersPage({ state, applyState, openDrawer }: PageProps) {
     applyState(commitOperation(state, { patch: { suppliers: [...state.suppliers, supplier] }, movements: [], auditEntries }), 'Proveedor guardado.');
     setForm({ name: '', contact: '', phone: '', email: '', address: '' });
   };
+  const saveEdit = () => {
+    if (!editing || !editing.name.trim()) return;
+    const auditEntries = [audit({ entity: 'suppliers', entityId: editing.id, field: 'edición', before: state.suppliers.find((s) => s.id === editing.id), after: editing, reason: 'Edición manual proveedor', origin: 'manual', user: state.settings.currentUser })];
+    applyState(commitOperation(state, { patch: { suppliers: state.suppliers.map((s) => s.id === editing.id ? editing : s) }, movements: [], auditEntries }), 'Proveedor actualizado.');
+    setEditing(null);
+  };
+  const deleteSupplier = (supplier: Supplier) => setPendingConfirm({
+    title: 'Desactivar proveedor',
+    label: 'Desactivar',
+    danger: true,
+    body: <p>Esta acción puede afectar compras históricas y trazabilidad de lotes. Se desactivará el proveedor.</p>,
+    onConfirm: () => {
+      const updated = { ...supplier, active: false };
+      const auditEntries = [audit({ entity: 'suppliers', entityId: supplier.id, field: 'active', before: supplier.active, after: updated.active, reason: 'Baja lógica proveedor con historial', origin: 'manual', user: state.settings.currentUser })];
+      applyState(commitOperation(state, { patch: { suppliers: state.suppliers.map((s) => s.id === supplier.id ? updated : s) }, movements: [], auditEntries }), 'Proveedor desactivado.');
+    }
+  });
   return (
     <Section title="Proveedores" subtitle="Datos, historial de compras, insumos comprados y costo histórico por proveedor.">
       <div className="card form-card compact-form"><div className="form-grid six-cols">
@@ -818,24 +874,39 @@ function SuppliersPage({ state, applyState, openDrawer }: PageProps) {
       </div></div>
       <div className="card">
         <header className="card-head"><h3>Listado de proveedores</h3><button className="ghost" onClick={() => exportModuleCsv(state, 'proveedores')}>Exportar CSV</button></header>
-        <SmartTable rows={state.suppliers} onRowClick={(s) => openDrawer('supplier', s.id)} columns={[{ key: 'name', header: 'Proveedor' }, { key: 'contact', header: 'Contacto' }, { key: 'phone', header: 'Teléfono' }, { key: 'email', header: 'Email' }, { key: 'active', header: 'Estado', render: (s) => <Badge label={s.active ? 'activo' : 'inactivo'} tone={s.active ? 'good' : 'neutral'} /> }]} />
+        <SmartTable rows={state.suppliers} onRowClick={(s) => openDrawer('supplier', s.id)} columns={[{ key: 'name', header: 'Proveedor' }, { key: 'contact', header: 'Contacto' }, { key: 'phone', header: 'Teléfono' }, { key: 'email', header: 'Email' }, { key: 'active', header: 'Estado', render: (s) => <Badge label={s.active ? 'activo' : 'inactivo'} tone={s.active ? 'good' : 'neutral'} /> }, { key: 'actions', header: 'Acciones', sortable: false, render: (s) => <RowActions onEdit={() => setEditing(s)} onDelete={() => deleteSupplier(s)} deleteLabel="Desactivar" /> }]} />
       </div>
+      {editing && <Modal title="Editar proveedor" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}><div className="form-grid two-cols"><Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field><Field label="Contacto"><input value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field><Field label="Teléfono"><input value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field><Field label="Email"><input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field></div></Modal>}
     </Section>
   );
 }
 
-function FormulasPage({ state, openDrawer }: PageProps) {
+function FormulasPage({ state, applyState, setPendingConfirm, openDrawer }: PageProps) {
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<Formula | null>(null);
   const rows = state.formulas.filter((f) => includesText(`${f.name} ${f.revision}`, query));
+  const saveEdit = () => {
+    if (!editing || !editing.name.trim() || !editing.revision.trim()) return;
+    const auditEntries = [audit({ entity: 'formulas', entityId: editing.id, field: 'edición', before: state.formulas.find((f) => f.id === editing.id), after: editing, reason: 'Edición manual fórmula', origin: 'manual', user: state.settings.currentUser })];
+    applyState(commitOperation(state, { patch: { formulas: state.formulas.map((f) => f.id === editing.id ? editing : f) }, movements: [], auditEntries }), 'Fórmula actualizada.');
+    setEditing(null);
+  };
+  const deleteFormula = (formula: Formula) => setPendingConfirm({ title: 'Desactivar fórmula', label: 'Desactivar', danger: true, body: <p>Esta acción puede afectar trazabilidad de producción. Se desactivará la fórmula para mantener historial.</p>, onConfirm: () => {
+    const updated = { ...formula, active: false };
+    const auditEntries = [audit({ entity: 'formulas', entityId: formula.id, field: 'active', before: formula.active, after: updated.active, reason: 'Baja lógica fórmula con historial', origin: 'manual', user: state.settings.currentUser })];
+    applyState(commitOperation(state, { patch: { formulas: state.formulas.map((f) => f.id === formula.id ? updated : f) }, movements: [], auditEntries }), 'Fórmula desactivada.');
+  } });
   return (
     <Section title="Fórmulas" subtitle="Revisiones, ingredientes, tolerancias, batch size y asociación a producto.">
       <div className="card">
         <header className="card-head"><input className="search" placeholder="Buscar fórmula…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportFullExcel(state)}>Exportar suite</button></header>
         <SmartTable rows={rows} onRowClick={(f) => f.productId && openDrawer('product', f.productId)} columns={[
           { key: 'name', header: 'Fórmula' }, { key: 'revision', header: 'Revisión' }, { key: 'batchSizeMl', header: 'Batch', render: (f) => qty(f.batchSizeMl, 'ml') },
-          { key: 'ingredients', header: 'Insumos', render: (f) => f.ingredients.length }, { key: 'active', header: 'Estado', render: (f) => <Badge label={f.active ? 'activa' : 'inactiva'} tone={f.active ? 'good' : 'neutral'} /> }
+          { key: 'ingredients', header: 'Insumos', render: (f) => f.ingredients.length }, { key: 'active', header: 'Estado', render: (f) => <Badge label={f.active ? 'activa' : 'inactiva'} tone={f.active ? 'good' : 'neutral'} /> },
+          { key: 'actions', header: 'Acciones', sortable: false, render: (f) => <RowActions onEdit={() => setEditing(f)} onDelete={() => deleteFormula(f)} deleteLabel="Desactivar" /> }
         ]} />
       </div>
+      {editing && <Modal title="Editar fórmula" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim() || !editing.revision.trim()}>Guardar cambios</button></>}><div className="form-grid two-cols"><Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field><Field label="Revisión"><input value={editing.revision} onChange={(e) => setEditing({ ...editing, revision: e.target.value })} /></Field><Field label="Batch (ml)"><input type="number" value={editing.batchSizeMl} onChange={(e) => setEditing({ ...editing, batchSizeMl: toNumber(e.target.value) })} /></Field></div></Modal>}
     </Section>
   );
 }
@@ -884,12 +955,13 @@ function CostsPage({ state, applyState }: PageProps) {
   );
 }
 
-function CombosPage({ state, applyState }: PageProps) {
+function CombosPage({ state, applyState, setPendingConfirm }: PageProps) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
   const [components, setComponents] = useState<Array<{ productId: string; qty: number }>>([]);
   const [componentProduct, setComponentProduct] = useState(state.products.find((p) => p.active)?.id ?? '');
   const [componentQty, setComponentQty] = useState(1);
+  const [editing, setEditing] = useState<Combo | null>(null);
   const addComponent = () => {
     if (!componentProduct || componentQty <= 0) return;
     setComponents((old) => [...old, { productId: componentProduct, qty: componentQty }]);
@@ -901,6 +973,29 @@ function CombosPage({ state, applyState }: PageProps) {
     applyState(commitOperation(state, { patch: { combos: [...state.combos, combo] }, movements: [], auditEntries }), 'Combo guardado.');
     setName(''); setPrice(0); setComponents([]);
   };
+  const saveEdit = () => {
+    if (!editing || !editing.name.trim()) return;
+    const auditEntries = [audit({ entity: 'combos', entityId: editing.id, field: 'edición', before: state.combos.find((c) => c.id === editing.id), after: editing, reason: 'Edición manual combo', origin: 'manual', user: state.settings.currentUser })];
+    applyState(commitOperation(state, { patch: { combos: state.combos.map((c) => c.id === editing.id ? editing : c) }, movements: [], auditEntries }), 'Combo actualizado.');
+    setEditing(null);
+  };
+  const deleteCombo = (combo: Combo) => setPendingConfirm({
+    title: 'Eliminar combo',
+    label: 'Eliminar',
+    danger: true,
+    body: <p>Esta acción puede afectar reportes de ventas históricas. Si hay referencias se desactivará; sin referencias se eliminará definitivamente.</p>,
+    onConfirm: () => {
+      const hasReferences = state.sales.some((s) => s.parentCombo === combo.name) || state.orders.some((o) => o.notes.includes(combo.name));
+      if (hasReferences) {
+        const updated = { ...combo, active: false };
+        const auditEntries = [audit({ entity: 'combos', entityId: combo.id, field: 'active', before: combo.active, after: updated.active, reason: 'Baja lógica combo con historial', origin: 'manual', user: state.settings.currentUser })];
+        applyState(commitOperation(state, { patch: { combos: state.combos.map((c) => c.id === combo.id ? updated : c) }, movements: [], auditEntries }), 'Combo desactivado por referencias históricas.');
+      } else {
+        const auditEntries = [audit({ entity: 'combos', entityId: combo.id, field: 'hard-delete', before: combo, after: '', reason: 'Eliminación física combo sin referencias', origin: 'manual', user: state.settings.currentUser })];
+        applyState(commitOperation(state, { patch: { combos: state.combos.filter((c) => c.id !== combo.id) }, movements: [], auditEntries }), 'Combo eliminado.');
+      }
+    }
+  });
   return (
     <Section title="Combos y promos" subtitle="Box, promos y combos que explotan internamente a SKUs reales para descontar stock.">
       <div className="grid two">
@@ -911,8 +1006,9 @@ function CombosPage({ state, applyState }: PageProps) {
           <SmartTable rows={components.map((c, index) => ({ id: `${c.productId}-${index}`, ...c, name: state.products.find((p) => p.id === c.productId)?.name ?? c.productId }))} dense columns={[{ key: 'name', header: 'Producto' }, { key: 'qty', header: 'Cantidad' }]} />
           <button className="primary wide-button" onClick={save}>Guardar combo</button>
         </div>
-        <div className="card"><h3>Combos activos</h3><SmartTable rows={state.combos} columns={[{ key: 'name', header: 'Combo' }, { key: 'price', header: 'Precio', render: (c) => money(c.price) }, { key: 'components', header: 'Componentes', render: (c) => c.components.length }, { key: 'stock', header: 'Stock posible', render: (c) => qty(comboStockSummary(state, c).available) }, { key: 'active', header: 'Estado', render: (c) => <Badge label={c.active ? 'activo' : 'inactivo'} tone={c.active ? 'good' : 'neutral'} /> }]} /></div>
+        <div className="card"><h3>Combos activos</h3><SmartTable rows={state.combos} columns={[{ key: 'name', header: 'Combo' }, { key: 'price', header: 'Precio', render: (c) => money(c.price) }, { key: 'components', header: 'Componentes', render: (c) => c.components.length }, { key: 'stock', header: 'Stock posible', render: (c) => qty(comboStockSummary(state, c).available) }, { key: 'active', header: 'Estado', render: (c) => <Badge label={c.active ? 'activo' : 'inactivo'} tone={c.active ? 'good' : 'neutral'} /> }, { key: 'actions', header: 'Acciones', sortable: false, render: (c) => <RowActions onEdit={() => setEditing(c)} onDelete={() => deleteCombo(c)} deleteLabel={c.active ? 'Eliminar/Desactivar' : 'Eliminar'} /> }]} /></div>
       </div>
+      {editing && <Modal title="Editar combo" onClose={() => setEditing(null)} footer={<><button className="ghost" onClick={() => setEditing(null)}>Cancelar</button><button className="primary" onClick={saveEdit} disabled={!editing.name.trim()}>Guardar cambios</button></>}><div className="form-grid two-cols"><Field label="Nombre"><input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field><Field label="Precio"><input type="number" value={editing.price} onChange={(e) => setEditing({ ...editing, price: toNumber(e.target.value) })} /></Field></div></Modal>}
     </Section>
   );
 }
