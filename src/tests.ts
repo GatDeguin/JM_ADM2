@@ -1,5 +1,5 @@
 import type { AppState, TestResult } from './types';
-import { buildExcelXml } from './importExport';
+import { applyImport, buildExcelXml, parseCsv, rowsToObjects } from './importExport';
 import { clone, sortBy, todayISO } from './utils';
 import { applyInventoryCount, closeSale, previewProduction, previewPurchase, previewSale, productStock, registerProduction, runIntegrityChecks } from './engine';
 
@@ -74,6 +74,31 @@ export function runInternalTests(state: AppState): TestResult[] {
   if (supplier && material) {
     tests.push(result('funciones QA disponibles', Boolean(registerProduction) && Boolean(previewPurchase), 'Los motores centrales están importables para pruebas unitarias futuras.'));
   }
+
+  const supplierCsvHeaders = 'Nombre;Persona de contacto;Teléfono;E-mail;Dirección\nProveedor Uno;Ana Pérez;11-2222-3333;ana@proveedor.com;Calle 123';
+  const supplierRows = rowsToObjects(parseCsv(supplierCsvHeaders));
+  const importedSuppliers = applyImport(clone(state), 'proveedores', supplierRows);
+  const supplierA = importedSuppliers.next.suppliers.find((s) => s.name === 'Proveedor Uno');
+  tests.push(result(
+    'importador proveedores mapea alias de contacto/teléfono/email',
+    Boolean(supplierA && supplierA.contact === 'Ana Pérez' && supplierA.phone === '11-2222-3333' && supplierA.email === 'ana@proveedor.com'),
+    supplierA ? `${supplierA.contact} | ${supplierA.phone} | ${supplierA.email}` : 'Proveedor no encontrado'
+  ));
+
+  const supplierCsvDelimited = 'name,contact,phone,email,address\nProveedor Dos,"Luis|María","11-4444-5555;11-6666-7777","compras@proveedor.com,ventas@proveedor.com","Av. Siempre Viva 742"';
+  const supplierRowsDelimited = rowsToObjects(parseCsv(supplierCsvDelimited));
+  const importedDelimited = applyImport(clone(state), 'proveedores', supplierRowsDelimited);
+  const supplierB = importedDelimited.next.suppliers.find((s) => s.name === 'Proveedor Dos');
+  tests.push(result(
+    'importador proveedores conserva campos correctos con separadores',
+    Boolean(supplierB && supplierB.contact === 'Luis|María' && supplierB.phone === '11-4444-5555;11-6666-7777' && supplierB.email === 'compras@proveedor.com,ventas@proveedor.com'),
+    supplierB ? `${supplierB.contact} | ${supplierB.phone} | ${supplierB.email}` : 'Proveedor no encontrado'
+  ));
+  tests.push(result(
+    'importador proveedores emite warning por múltiples valores',
+    importedDelimited.warnings.some((warning) => warning.includes('múltiples valores')),
+    importedDelimited.warnings.join(' | ') || 'Sin warnings'
+  ));
 
   return tests;
 }

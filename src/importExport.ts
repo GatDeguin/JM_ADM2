@@ -53,7 +53,7 @@ export function objectsToCsv(rows: Record<string, unknown>[], headers?: string[]
 function lowerObject(row: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   Object.entries(row).forEach(([key, value]) => {
-    out[key.trim().toLowerCase()] = value;
+    out[key.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] = value;
   });
   return out;
 }
@@ -131,14 +131,33 @@ export function applyImport(state: AppState, destination: ImportDestination, row
     }
 
     if (destination === 'proveedores') {
+      const pick = (record: Record<string, string>, aliases: string[]): string => {
+        for (const alias of aliases) {
+          const key = alias.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const value = record[key];
+          if (typeof value === 'string' && value.trim()) return value.trim();
+        }
+        return '';
+      };
+      const hasMultiValueDelimiter = (value: string): boolean => /[,;|]/.test(value) && value.split(/[,;|]/).filter((part) => part.trim().length > 0).length > 1;
+
+      const contact = pick(row, ['contacto', 'contact', 'persona contacto', 'persona_de_contacto', 'contacto principal', 'nombre contacto']);
+      const phone = pick(row, ['telefono', 'teléfono', 'tel', 'telefono contacto', 'tel contacto', 'phone', 'phone number', 'nro telefono', 'nro. telefono']);
+      const email = pick(row, ['email', 'e-mail', 'mail', 'correo', 'correo electronico', 'correo electrónico', 'email contacto', 'mail contacto']);
+
+      const supplierName = pick(row, ['nombre', 'name']) || '(sin nombre)';
+      if ([['contacto', contact], ['teléfono', phone], ['email', email]].some(([, value]) => hasMultiValueDelimiter(value))) {
+        warnings.push(`Proveedor ${supplierName}: se detectaron múltiples valores en contacto/teléfono/email. Revisar separadores (, ; |).`);
+      }
+
       const id = row.id || `sup-${slug(row.nombre || row.name || uid('proveedor'))}`;
       const entity: Supplier = {
         id,
-        name: row.nombre || row.name || id,
+        name: pick(row, ['nombre', 'name']) || id,
         address: row.direccion || row.dirección || row.address || '',
-        contact: row.contacto || row.contact || '',
-        phone: row.telefono || row.teléfono || row.phone || '',
-        email: row.email || row.mail || '',
+        contact,
+        phone,
+        email,
         notes: row.notes || row.observaciones || '',
         active: !(row.active || row.activo || 'true').toLowerCase().startsWith('false')
       };
