@@ -148,6 +148,10 @@ input:focus, select:focus, textarea:focus { border-color: rgba(184,150,116,.8); 
 .segmented button { padding: 9px 13px; border-radius: 12px; background: transparent; font-weight: 750; }
 .segmented button.active { background: var(--ink); color: #fff; }
 .table-wrap { overflow: auto; border-radius: 18px; border: 1px solid var(--line); }
+.table-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255,255,255,.52); border-bottom: 1px solid var(--line); }
+.table-controls { display: flex; align-items: center; gap: 8px; }
+.table-controls label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.table-controls select { width: auto; padding: 6px 8px; border-radius: 10px; }
 .smart-table { width: 100%; border-collapse: collapse; min-width: 780px; background: rgba(255,255,255,.38); }
 .smart-table th, .smart-table td { padding: 13px 14px; border-bottom: 1px solid rgba(17,17,17,.08); text-align: left; vertical-align: top; }
 .smart-table th { position: sticky; top: 0; z-index: 1; background: rgba(216,194,167,.78); backdrop-filter: blur(16px); color: var(--ink); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; user-select: none; }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AppState } from './types';
 import { includesText, money, qty } from './utils';
 
@@ -106,7 +106,9 @@ export interface Column<T> {
   className?: string;
 }
 
-export function SmartTable<T extends object>({ rows, columns, onRowClick, dense = false, maxRows }: { rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void; dense?: boolean; maxRows?: number }) {
+type SmartTableMode = 'paged' | 'incremental';
+
+export function SmartTable<T extends object>({ rows, columns, onRowClick, dense = false, maxRows, page = 1, pageSize = 50, onPageChange, mode = 'paged' }: { rows: T[]; columns: Column<T>[]; onRowClick?: (row: T) => void; dense?: boolean; maxRows?: number; page?: number; pageSize?: number; onPageChange?: (page: number, pageSize: number) => void; mode?: SmartTableMode }) {
   const [sort, setSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: columns[0]?.key ?? 'id', direction: 'asc' });
   const sortedRows = useMemo(() => {
     const column = columns.find((c) => c.key === sort.key);
@@ -119,9 +121,39 @@ export function SmartTable<T extends object>({ rows, columns, onRowClick, dense 
       return String(av).localeCompare(String(bv), 'es') * factor;
     });
   }, [rows, columns, sort]);
-  const visible = typeof maxRows === 'number' ? sortedRows.slice(0, maxRows) : sortedRows;
+  const limitedRows = typeof maxRows === 'number' ? sortedRows.slice(0, maxRows) : sortedRows;
+  const safePageSize = Math.max(1, pageSize);
+  const maxPage = Math.max(1, Math.ceil(limitedRows.length / safePageSize));
+  const safePage = Math.min(Math.max(1, page), maxPage);
+  useEffect(() => {
+    if (!onPageChange) return;
+    if (safePage !== page) onPageChange(safePage, safePageSize);
+  }, [safePage, page, safePageSize, onPageChange]);
+  const visible = useMemo(() => {
+    if (mode === 'incremental') {
+      return limitedRows.slice(0, safePage * safePageSize);
+    }
+    const start = (safePage - 1) * safePageSize;
+    return limitedRows.slice(start, start + safePageSize);
+  }, [limitedRows, mode, safePage, safePageSize]);
+  const handlePageSize = (value: number) => onPageChange?.(1, value);
   return (
     <div className="table-wrap">
+      <div className="table-meta">
+        <small>Mostrando {visible.length.toLocaleString('es-AR')} de {limitedRows.length.toLocaleString('es-AR')} registros</small>
+        {onPageChange && (
+          <div className="table-controls">
+            <label>Tamaño
+              <select value={safePageSize} onChange={(event) => handlePageSize(Number(event.target.value))}>
+                {[25, 50, 100, 250].map((size) => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
+            <button className="ghost" onClick={() => onPageChange(Math.max(1, safePage - 1), safePageSize)} disabled={safePage <= 1}>Anterior</button>
+            <span>{mode === 'incremental' ? `Lote ${safePage}` : `Página ${safePage} de ${maxPage}`}</span>
+            <button className="ghost" onClick={() => onPageChange(Math.min(maxPage, safePage + 1), safePageSize)} disabled={safePage >= maxPage}>{mode === 'incremental' ? 'Cargar más' : 'Siguiente'}</button>
+          </div>
+        )}
+      </div>
       <table className={dense ? 'smart-table dense' : 'smart-table'}>
         <thead>
           <tr>
