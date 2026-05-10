@@ -1,5 +1,7 @@
 import type { AppState } from '../types';
 
+// Nota seed: el SKU representa la familia comercial y se repite entre variantes;
+// la variante se identifica por `id` y `sizeMl`/`size`.
 export const seedState: AppState = {
   "schemaVersion": 1,
   "products": [

@@ -68,6 +68,10 @@ function validateRequiredDate(value: string, label: string): string[] {
   return [];
 }
 
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -995,12 +999,12 @@ function CostsPage({ state, applyState }: PageProps) {
   };
   const lineProfit = profitabilityByLine(state);
   return (
-    <Section title="Costos, precios y rentabilidad" subtitle="Costo por lote/producto, lista de precios, valor de stock y rentabilidad por línea.">
+    <Section title="Costos, precios y rentabilidad" subtitle="Costo por lote/producto, lista de precios, valor de stock y rentabilidad por línea. SKU familia, variante por tamaño (id/size).">
       <div className="grid two">
-        <div className="card"><h3>Rentabilidad por línea</h3><SmartTable rows={lineProfit} dense columns={[{ key: 'line', header: 'Línea' }, { key: 'revenue', header: 'Facturación', render: (r) => money(r.revenue) }, { key: 'cost', header: 'Costo', render: (r) => money(r.cost) }, { key: 'margin', header: 'Margen', render: (r) => money(r.margin) }, { key: 'pct', header: '%', render: (r) => `${Math.round(r.pct * 100)}%` }]} /></div>
+        <div className="card"><h3>Rentabilidad por línea</h3><SmartTable rows={lineProfit} dense columns={[{ key: 'line', header: 'Línea' }, { key: 'revenue', header: 'Facturación', render: (r) => money(r.revenue) }, { key: 'cost', header: 'Costo', render: (r) => money(r.cost) }, { key: 'margin', header: 'Margen', render: (r) => money(r.margin) }, { key: 'pct', header: '%', render: (r) => formatPercent(r.pct) }]} /></div>
         <div className="card"><h3>Valor de stock por lote</h3><SmartTable rows={state.productLots.filter((l) => l.qtyAvailable > 0).slice(0, 15)} dense columns={[{ key: 'productName', header: 'Producto' }, { key: 'lotNumber', header: 'Lote' }, { key: 'qtyAvailable', header: 'Qty', render: (r) => qty(r.qtyAvailable) }, { key: 'value', header: 'Valor', render: (r) => money(r.qtyAvailable * r.unitCost) }]} /></div>
       </div>
-      <div className="card"><header className="card-head"><h3>Lista de precios auditada</h3><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar precios</button></header><SmartTable rows={state.products.filter((p) => p.active)} columns={[{ key: 'sku', header: 'SKU' }, { key: 'name', header: 'Producto' }, { key: 'costReference', header: 'Costo ref.', render: (p) => <input className="inline-input" type="number" defaultValue={p.costReference} onBlur={(e) => updateProductPrice(p, 'costReference', toNumber(e.target.value))} /> }, { key: 'listPrice', header: 'Precio lista', render: (p) => <input className="inline-input" type="number" defaultValue={p.listPrice} onBlur={(e) => updateProductPrice(p, 'listPrice', toNumber(e.target.value))} /> }, { key: 'margin', header: 'Margen', render: (p) => money(p.listPrice - p.costReference) }, { key: 'pct', header: '%', render: (p) => p.listPrice ? `${Math.round(((p.listPrice - p.costReference) / p.listPrice) * 100)}%` : '—' }]} /></div>
+      <div className="card"><header className="card-head"><h3 title="SKU familia, variante por tamaño">Lista de precios auditada</h3><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar precios</button></header><SmartTable rows={state.products.filter((p) => p.active)} columns={[{ key: 'sku', header: 'SKU familia' }, { key: 'variant', header: 'Variante', render: (p) => p.sizeMl > 0 ? `${p.id} · ${qty(p.sizeMl, 'ml')}` : p.id }, { key: 'name', header: 'Producto' }, { key: 'costReference', header: 'Costo ref.', render: (p) => <input className="inline-input" type="number" defaultValue={p.costReference} onBlur={(e) => updateProductPrice(p, 'costReference', toNumber(e.target.value))} /> }, { key: 'listPrice', header: 'Precio lista', render: (p) => <input className="inline-input" type="number" defaultValue={p.listPrice} onBlur={(e) => updateProductPrice(p, 'listPrice', toNumber(e.target.value))} /> }, { key: 'margin', header: 'Margen', render: (p) => money(p.listPrice - p.costReference) }, { key: 'pct', header: '%', render: (p) => p.listPrice ? formatPercent((p.listPrice - p.costReference) / p.listPrice) : '—' }]} /></div>
     </Section>
   );
 }
