@@ -710,7 +710,7 @@ function ProductsPage({ state, applyState, openDrawer }: PageProps) {
         </div>
       </div>
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar producto…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar CSV</button></header>
+        <header className="card-head"><input className="search" placeholder="Buscar producto…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar CSV</button></header>
         <SmartTable rows={rows} onRowClick={(p) => openDrawer('product', p.id)} columns={[
           { key: 'sku', header: 'SKU' }, { key: 'name', header: 'Producto' }, { key: 'line', header: 'Línea' }, { key: 'size', header: 'Tamaño' },
           { key: 'stock', header: 'Stock', value: (p) => productStock(state, p.id).available, render: (p) => <StockTriple system={productStock(state, p.id).system} physical={productStock(state, p.id).physical} available={productStock(state, p.id).available} /> },
@@ -746,7 +746,7 @@ function MaterialsPage({ state, applyState, openDrawer }: PageProps) {
         <button className="primary align-end" onClick={save}>Guardar</button>
       </div></div>
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar material…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => exportModuleCsv(state, 'materiales')}>Exportar CSV</button></header>
+        <header className="card-head"><input className="search" placeholder="Buscar material…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'materiales')}>Exportar CSV</button></header>
         <SmartTable rows={rows} onRowClick={(m) => openDrawer('material', m.id)} columns={[
           { key: 'name', header: 'Material' }, { key: 'category', header: 'Categoría' }, { key: 'unit', header: 'Unidad' },
           { key: 'stock', header: 'Stock', value: (m) => materialStock(state, m.id).available, render: (m) => <StockTriple system={materialStock(state, m.id).system} physical={materialStock(state, m.id).physical} available={materialStock(state, m.id).available} unit={m.unit} /> },
@@ -786,7 +786,7 @@ function ClientsPage({ state, applyState, openDrawer }: PageProps) {
         <button className="primary align-end" onClick={save}>Guardar</button>
       </div></div>
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar cliente…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => exportModuleCsv(state, 'clientes')}>Exportar CSV</button></header>
+        <header className="card-head"><input className="search" placeholder="Buscar cliente…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'clientes')}>Exportar CSV</button></header>
         <SmartTable rows={rows} onRowClick={(c) => openDrawer('client', c.id)} columns={[
           { key: 'name', header: 'Cliente' }, { key: 'phone', header: 'Teléfono' }, { key: 'city', header: 'Ciudad' }, { key: 'province', header: 'Provincia' }, { key: 'segment', header: 'Segmento' },
           { key: 'lastPurchase', header: 'Última compra', render: (c) => dateLabel(c.lastPurchase) },
@@ -830,7 +830,7 @@ function FormulasPage({ state, openDrawer }: PageProps) {
   return (
     <Section title="Fórmulas" subtitle="Revisiones, ingredientes, tolerancias, batch size y asociación a producto.">
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar fórmula…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => exportFullExcel(state)}>Exportar suite</button></header>
+        <header className="card-head"><input className="search" placeholder="Buscar fórmula…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportFullExcel(state)}>Exportar suite</button></header>
         <SmartTable rows={rows} onRowClick={(f) => f.productId && openDrawer('product', f.productId)} columns={[
           { key: 'name', header: 'Fórmula' }, { key: 'revision', header: 'Revisión' }, { key: 'batchSizeMl', header: 'Batch', render: (f) => qty(f.batchSizeMl, 'ml') },
           { key: 'ingredients', header: 'Insumos', render: (f) => f.ingredients.length }, { key: 'active', header: 'Estado', render: (f) => <Badge label={f.active ? 'activa' : 'inactiva'} tone={f.active ? 'good' : 'neutral'} /> }
@@ -855,7 +855,7 @@ function LotsPage({ state, applyState, openDrawer }: PageProps) {
   return (
     <Section title="Lotes y FEFO" subtitle="Lotes PT/MP, vencimientos, estados, ubicaciones, bloqueo y trazabilidad.">
       <div className="card">
-        <header className="card-head"><div className="segmented"><button className={tab === 'pt' ? 'active' : ''} onClick={() => setTab('pt')}>Producto terminado</button><button className={tab === 'mp' ? 'active' : ''} onClick={() => setTab('mp')}>MP / packaging</button></div><input className="search" placeholder="Buscar lote…" value={query} onChange={(e) => setQuery(e.target.value)} /></header>
+        <header className="card-head"><div className="segmented"><button className={tab === 'pt' ? 'active' : ''} onClick={() => setTab('pt')}>Producto terminado</button><button className={tab === 'mp' ? 'active' : ''} onClick={() => setTab('mp')}>MP / packaging</button></div><input className="search" placeholder="Buscar lote…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button></header>
         {tab === 'pt' ? <SmartTable rows={rowsPT} onRowClick={(l) => openDrawer('productLot', l.id)} columns={[
           { key: 'productName', header: 'Producto' }, { key: 'lotNumber', header: 'Lote' }, { key: 'expiry', header: 'Vence', render: (l) => dateLabel(l.expiry) }, { key: 'qtyAvailable', header: 'Disponible', render: (l) => qty(l.qtyAvailable) }, { key: 'unitCost', header: 'Costo/u', render: (l) => money(l.unitCost) }, { key: 'location', header: 'Ubicación' }, { key: 'status', header: 'Estado', render: (l) => <select value={l.status} onClick={(e) => e.stopPropagation()} onChange={(e) => updateProductLotStatus(l.id, e.target.value as ProductLotStatus)}>{['liberado', 'cuarentena', 'bloqueado', 'rechazado', 'vencido', 'agotado'].map((s) => <option key={s}>{s}</option>)}</select> }
         ]} /> : <SmartTable rows={rowsMP} onRowClick={(l) => openDrawer('materialLot', l.id)} columns={[
@@ -918,9 +918,35 @@ function CombosPage({ state, applyState }: PageProps) {
 }
 
 function MovementsPage({ state }: PageProps) {
+  const [query, setQuery] = useState('');
+  const [type, setType] = useState('');
+  const [user, setUser] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const rows = useMemo(() => state.movements.filter((m) => {
+    if (fromDate && m.date < fromDate) return false;
+    if (toDate && m.date > toDate) return false;
+    if (type && m.type !== type) return false;
+    if (user && m.user !== user) return false;
+    if (query && !includesText(`${m.type} ${m.item} ${m.reason} ${m.sourceDocument} ${m.lotNumber} ${m.user}`, query)) return false;
+    return true;
+  }), [state.movements, fromDate, toDate, type, user, query]);
+  const resetFilters = () => { setQuery(''); setType(''); setUser(''); setFromDate(''); setToDate(''); };
+  const movementTypes = useMemo(() => Array.from(new Set(state.movements.map((m) => m.type))).sort((a, b) => a.localeCompare(b, 'es')), [state.movements]);
+  const users = useMemo(() => Array.from(new Set(state.movements.map((m) => m.user))).sort((a, b) => a.localeCompare(b, 'es')), [state.movements]);
   return (
     <Section title="Movimientos" subtitle="Histórico completo de tipo, entidad, ítem, cantidad, valor, usuario, documento, lote y motivo." actions={<button className="ghost" onClick={() => exportModuleCsv(state, 'movimientos')}>Exportar CSV</button>}>
-      <div className="card"><SmartTable rows={state.movements.slice().reverse()} columns={[{ key: 'date', header: 'Fecha', render: (m) => dateLabel(m.date) }, { key: 'type', header: 'Tipo' }, { key: 'item', header: 'Ítem' }, { key: 'qty', header: 'Cantidad', render: (m) => qty(m.qty, m.unit) }, { key: 'value', header: 'Valor', render: (m) => money(m.value) }, { key: 'user', header: 'Usuario' }, { key: 'sourceDocument', header: 'Documento' }, { key: 'lotNumber', header: 'Lote' }, { key: 'reason', header: 'Motivo' }]} /></div>
+      <div className="card">
+        <header className="card-head">
+          <input className="search" placeholder="Buscar movimiento…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <select value={type} onChange={(e) => setType(e.target.value)}><option value="">Tipo</option>{movementTypes.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <select value={user} onChange={(e) => setUser(e.target.value)}><option value="">Usuario</option>{users.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <button className="ghost" onClick={resetFilters}>Borrar búsqueda/filtros</button>
+        </header>
+        <SmartTable rows={rows} columns={[{ key: 'date', header: 'Fecha', render: (m) => dateLabel(m.date) }, { key: 'type', header: 'Tipo' }, { key: 'item', header: 'Ítem' }, { key: 'qty', header: 'Cantidad', render: (m) => qty(m.qty, m.unit) }, { key: 'value', header: 'Valor', render: (m) => money(m.value) }, { key: 'user', header: 'Usuario' }, { key: 'sourceDocument', header: 'Documento' }, { key: 'lotNumber', header: 'Lote' }, { key: 'reason', header: 'Motivo' }]} />
+      </div>
     </Section>
   );
 }
@@ -938,12 +964,40 @@ function AuditPage({ state }: PageProps) {
 
 function IntegrityPage({ state, applyState, setPendingConfirm, setPage }: PageProps) {
   const issues = runIntegrityChecks(state);
+  const [severity, setSeverity] = useState('');
+  const [module, setModule] = useState('');
+  const [control, setControl] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const filteredIssues = useMemo(() => issues.filter((issue) => {
+    const issueDate = (issue as { date?: string; timestamp?: string }).date ?? (issue as { timestamp?: string }).timestamp ?? '';
+    if (severity && issue.severity !== severity) return false;
+    if (module && (issue.module ?? '') !== module) return false;
+    if (control && !includesText(issue.control, control)) return false;
+    if (fromDate && issueDate && issueDate < fromDate) return false;
+    if (toDate && issueDate && issueDate > toDate) return false;
+    if ((fromDate || toDate) && !issueDate) return false;
+    return true;
+  }), [issues, severity, module, control, fromDate, toDate]);
+  const modules = useMemo(() => Array.from(new Set(issues.map((i) => i.module).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'es')), [issues]);
+  const controls = useMemo(() => Array.from(new Set(issues.map((i) => i.control))).sort((a, b) => a.localeCompare(b, 'es')), [issues]);
+  const resetFilters = () => { setSeverity(''); setModule(''); setControl(''); setFromDate(''); setToDate(''); };
   const repair = () => {
     setPendingConfirm({ title: 'Reparar integridad seguro', label: 'Reparar seguro', body: <p>Se recalcularán estados de lotes agotados/vencidos desde los lotes existentes y se registrará auditoría. No se eliminarán datos.</p>, onConfirm: () => { const result = safeRepairState(state); if (result.ok && result.data) applyState(result.data, `Reparación segura aplicada: ${Number(result.summary?.changed) || 0} cambios.`); } });
   };
   return (
     <Section title="Integridad" subtitle="Controles de stock, ventas, órdenes, fórmulas, precios, vencimientos, negativos, margen y deuda." actions={<button className="primary" onClick={repair}>Reparar seguro</button>}>
-      <div className="card"><SmartTable rows={issues} columns={[{ key: 'severity', header: 'Severidad', render: (i) => <Badge label={i.severity} tone={i.severity === 'crítico' ? 'danger' : i.severity === 'atención' ? 'warn' : 'info'} /> }, { key: 'control', header: 'Control' }, { key: 'detail', header: 'Detalle' }, { key: 'systemValue', header: 'Sistema' }, { key: 'expectedValue', header: 'Esperado' }, { key: 'recommendation', header: 'Acción recomendada' }, { key: 'module', header: 'Ir', render: (i) => i.module ? <button className="ghost" onClick={() => setPage(i.module ?? 'Dashboard')}>{i.module}</button> : '—' }]} /></div>
+      <div className="card">
+        <header className="card-head">
+          <select value={severity} onChange={(e) => setSeverity(e.target.value)}><option value="">Severidad</option>{['crítico', 'atención', 'info'].map((s) => <option key={s} value={s}>{s}</option>)}</select>
+          <select value={module} onChange={(e) => setModule(e.target.value)}><option value="">Módulo</option>{modules.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+          <select value={control} onChange={(e) => setControl(e.target.value)}><option value="">Control</option>{controls.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          <button className="ghost" onClick={resetFilters}>Borrar búsqueda/filtros</button>
+        </header>
+        <SmartTable rows={filteredIssues} columns={[{ key: 'severity', header: 'Severidad', render: (i) => <Badge label={i.severity} tone={i.severity === 'crítico' ? 'danger' : i.severity === 'atención' ? 'warn' : 'info'} /> }, { key: 'control', header: 'Control' }, { key: 'detail', header: 'Detalle' }, { key: 'systemValue', header: 'Sistema' }, { key: 'expectedValue', header: 'Esperado' }, { key: 'recommendation', header: 'Acción recomendada' }, { key: 'module', header: 'Ir', render: (i) => i.module ? <button className="ghost" onClick={() => setPage(i.module ?? 'Dashboard')}>{i.module}</button> : '—' }]} />
+      </div>
     </Section>
   );
 }
