@@ -695,6 +695,8 @@ function InventoryConfirmation({ preview, draft, itemName }: { preview: ReturnTy
 function ProductsPage({ state, applyState, openDrawer }: PageProps) {
   const [query, setQuery] = useState('');
   const [form, setForm] = useState({ sku: '', name: '', line: '', family: '', size: '', stockMin: 0, listPrice: 0, costReference: 0 });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const rows = state.products.filter((p) => includesText(`${p.sku} ${p.name} ${p.line} ${p.family}`, query));
   const save = () => {
     if (!form.name.trim()) return;
@@ -719,8 +721,8 @@ function ProductsPage({ state, applyState, openDrawer }: PageProps) {
         </div>
       </div>
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar producto…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar CSV</button></header>
-        <SmartTable rows={rows} onRowClick={(p) => openDrawer('product', p.id)} columns={[
+        <header className="card-head"><input className="search" placeholder="Buscar producto…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'productos')}>Exportar CSV</button></header>
+        <SmartTable rows={rows} page={page} pageSize={pageSize} onPageChange={(nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize); }} onRowClick={(p) => openDrawer('product', p.id)} columns={[
           { key: 'sku', header: 'SKU' }, { key: 'name', header: 'Producto' }, { key: 'line', header: 'Línea' }, { key: 'size', header: 'Tamaño' },
           { key: 'stock', header: 'Stock', value: (p) => productStock(state, p.id).available, render: (p) => <StockTriple system={productStock(state, p.id).system} physical={productStock(state, p.id).physical} available={productStock(state, p.id).available} /> },
           { key: 'price', header: 'Precio', value: (p) => p.listPrice, render: (p) => money(p.listPrice) },
@@ -735,6 +737,8 @@ function ProductsPage({ state, applyState, openDrawer }: PageProps) {
 function MaterialsPage({ state, applyState, openDrawer }: PageProps) {
   const [query, setQuery] = useState('');
   const [form, setForm] = useState({ name: '', category: 'materia prima', unit: 'ml', stockMin: 0, unitCost: 0 });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const rows = state.materials.filter((m) => includesText(`${m.name} ${m.category} ${m.unit}`, query));
   const save = () => {
     if (!form.name.trim()) return;
@@ -755,8 +759,8 @@ function MaterialsPage({ state, applyState, openDrawer }: PageProps) {
         <button className="primary align-end" onClick={save}>Guardar</button>
       </div></div>
       <div className="card">
-        <header className="card-head"><input className="search" placeholder="Buscar material…" value={query} onChange={(e) => setQuery(e.target.value)} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'materiales')}>Exportar CSV</button></header>
-        <SmartTable rows={rows} onRowClick={(m) => openDrawer('material', m.id)} columns={[
+        <header className="card-head"><input className="search" placeholder="Buscar material…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} /><button className="ghost" onClick={() => setQuery('')}>Borrar búsqueda/filtros</button><button className="ghost" onClick={() => exportModuleCsv(state, 'materiales')}>Exportar CSV</button></header>
+        <SmartTable rows={rows} page={page} pageSize={pageSize} onPageChange={(nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize); }} onRowClick={(m) => openDrawer('material', m.id)} columns={[
           { key: 'name', header: 'Material' }, { key: 'category', header: 'Categoría' }, { key: 'unit', header: 'Unidad' },
           { key: 'stock', header: 'Stock', value: (m) => materialStock(state, m.id).available, render: (m) => <StockTriple system={materialStock(state, m.id).system} physical={materialStock(state, m.id).physical} available={materialStock(state, m.id).available} unit={m.unit} /> },
           { key: 'unitCost', header: 'Costo unitario', value: (m) => m.unitCost, render: (m) => money(m.unitCost) },
@@ -1019,6 +1023,8 @@ function MovementsPage({ state }: PageProps) {
   const [user, setUser] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const rows = useMemo(() => state.movements.filter((m) => {
     if (fromDate && m.date < fromDate) return false;
     if (toDate && m.date > toDate) return false;
@@ -1027,21 +1033,21 @@ function MovementsPage({ state }: PageProps) {
     if (query && !includesText(`${m.type} ${m.item} ${m.reason} ${m.sourceDocument} ${m.lotNumber} ${m.user}`, query)) return false;
     return true;
   }), [state.movements, fromDate, toDate, type, user, query]);
-  const resetFilters = () => { setQuery(''); setType(''); setUser(''); setFromDate(''); setToDate(''); };
+  const resetFilters = () => { setQuery(''); setType(''); setUser(''); setFromDate(''); setToDate(''); setPage(1); };
   const movementTypes = useMemo(() => Array.from(new Set(state.movements.map((m) => m.type))).sort((a, b) => a.localeCompare(b, 'es')), [state.movements]);
   const users = useMemo(() => Array.from(new Set(state.movements.map((m) => m.user))).sort((a, b) => a.localeCompare(b, 'es')), [state.movements]);
   return (
     <Section title="Movimientos" subtitle="Histórico completo de tipo, entidad, ítem, cantidad, valor, usuario, documento, lote y motivo." actions={<button className="ghost" onClick={() => exportModuleCsv(state, 'movimientos')}>Exportar CSV</button>}>
       <div className="card">
         <header className="card-head">
-          <input className="search" placeholder="Buscar movimiento…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="search" placeholder="Buscar movimiento…" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
           <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           <select value={type} onChange={(e) => setType(e.target.value)}><option value="">Tipo</option>{movementTypes.map((item) => <option key={item} value={item}>{item}</option>)}</select>
           <select value={user} onChange={(e) => setUser(e.target.value)}><option value="">Usuario</option>{users.map((item) => <option key={item} value={item}>{item}</option>)}</select>
           <button className="ghost" onClick={resetFilters}>Borrar búsqueda/filtros</button>
         </header>
-        <SmartTable rows={rows} columns={[{ key: 'date', header: 'Fecha', render: (m) => dateLabel(m.date) }, { key: 'type', header: 'Tipo' }, { key: 'item', header: 'Ítem' }, { key: 'qty', header: 'Cantidad', render: (m) => qty(m.qty, m.unit) }, { key: 'value', header: 'Valor', render: (m) => money(m.value) }, { key: 'user', header: 'Usuario' }, { key: 'sourceDocument', header: 'Documento' }, { key: 'lotNumber', header: 'Lote' }, { key: 'reason', header: 'Motivo' }]} />
+        <SmartTable rows={rows} mode="incremental" page={page} pageSize={pageSize} onPageChange={(nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize); }} columns={[{ key: 'date', header: 'Fecha', render: (m) => dateLabel(m.date) }, { key: 'type', header: 'Tipo' }, { key: 'item', header: 'Ítem' }, { key: 'qty', header: 'Cantidad', render: (m) => qty(m.qty, m.unit) }, { key: 'value', header: 'Valor', render: (m) => money(m.value) }, { key: 'user', header: 'Usuario' }, { key: 'sourceDocument', header: 'Documento' }, { key: 'lotNumber', header: 'Lote' }, { key: 'reason', header: 'Motivo' }]} />
       </div>
     </Section>
   );
@@ -1050,10 +1056,12 @@ function MovementsPage({ state }: PageProps) {
 function AuditPage({ state }: PageProps) {
   const issues = runIntegrityChecks(state);
   const tests = runInternalTests(state);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize, setAuditPageSize] = useState(40);
   return (
     <Section title="Auditoría y QA" subtitle="Score operativo, issues, bitácora auditada y pruebas internas." actions={<button className="ghost" onClick={() => exportModuleCsv(state, 'auditoria')}>Exportar auditoría</button>}>
       <div className="kpi-grid"><KPI label="Críticos" value={issues.filter((i) => i.severity === 'crítico').length} tone="danger" /><KPI label="Atención" value={issues.filter((i) => i.severity === 'atención').length} tone="warn" /><KPI label="Info" value={issues.filter((i) => i.severity === 'info').length} /><KPI label="Tests OK" value={`${tests.filter((t) => t.passed).length}/${tests.length}`} tone={tests.every((t) => t.passed) ? 'good' : 'warn'} /></div>
-      <div className="grid two"><div className="card"><h3>Tests internos</h3>{tests.map((t) => <div className="test-row" key={t.name}><Badge label={t.passed ? 'OK' : 'Falla'} tone={t.passed ? 'good' : 'danger'} /><strong>{t.name}</strong><span>{t.detail}</span></div>)}</div><div className="card"><h3>Audit log</h3><SmartTable rows={state.auditLog.slice().reverse()} dense maxRows={40} columns={[{ key: 'date', header: 'Fecha', render: (a) => dateLabel(a.date) }, { key: 'module', header: 'Módulo' }, { key: 'entityId', header: 'Entidad' }, { key: 'field', header: 'Campo' }, { key: 'origin', header: 'Origen' }, { key: 'reason', header: 'Motivo' }]} /></div></div>
+      <div className="grid two"><div className="card"><h3>Tests internos</h3>{tests.map((t) => <div className="test-row" key={t.name}><Badge label={t.passed ? 'OK' : 'Falla'} tone={t.passed ? 'good' : 'danger'} /><strong>{t.name}</strong><span>{t.detail}</span></div>)}</div><div className="card"><h3>Audit log</h3><SmartTable rows={state.auditLog.slice().reverse()} dense page={auditPage} pageSize={auditPageSize} onPageChange={(nextPage, nextSize) => { setAuditPage(nextPage); setAuditPageSize(nextSize); }} columns={[{ key: 'date', header: 'Fecha', render: (a) => dateLabel(a.date) }, { key: 'module', header: 'Módulo' }, { key: 'entityId', header: 'Entidad' }, { key: 'field', header: 'Campo' }, { key: 'origin', header: 'Origen' }, { key: 'reason', header: 'Motivo' }]} /></div></div>
     </Section>
   );
 }
@@ -1065,6 +1073,8 @@ function IntegrityPage({ state, applyState, setPendingConfirm, setPage }: PagePr
   const [control, setControl] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(50);
   const filteredIssues = useMemo(() => issues.filter((issue) => {
     const issueDate = (issue as { date?: string; timestamp?: string }).date ?? (issue as { timestamp?: string }).timestamp ?? '';
     if (severity && issue.severity !== severity) return false;
@@ -1077,7 +1087,7 @@ function IntegrityPage({ state, applyState, setPendingConfirm, setPage }: PagePr
   }), [issues, severity, module, control, fromDate, toDate]);
   const modules = useMemo(() => Array.from(new Set(issues.map((i) => i.module).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'es')), [issues]);
   const controls = useMemo(() => Array.from(new Set(issues.map((i) => i.control))).sort((a, b) => a.localeCompare(b, 'es')), [issues]);
-  const resetFilters = () => { setSeverity(''); setModule(''); setControl(''); setFromDate(''); setToDate(''); };
+  const resetFilters = () => { setSeverity(''); setModule(''); setControl(''); setFromDate(''); setToDate(''); setTablePage(1); };
   const repair = () => {
     setPendingConfirm({ title: 'Reparar integridad seguro', label: 'Reparar seguro', body: <p>Se recalcularán estados de lotes agotados/vencidos desde los lotes existentes y se registrará auditoría. No se eliminarán datos.</p>, onConfirm: () => { const result = safeRepairState(state); if (result.ok && result.data) applyState(result.data, `Reparación segura aplicada: ${Number(result.summary?.changed) || 0} cambios.`); } });
   };
@@ -1092,7 +1102,7 @@ function IntegrityPage({ state, applyState, setPendingConfirm, setPage }: PagePr
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
           <button className="ghost" onClick={resetFilters}>Borrar búsqueda/filtros</button>
         </header>
-        <SmartTable rows={filteredIssues} columns={[{ key: 'severity', header: 'Severidad', render: (i) => <Badge label={i.severity} tone={i.severity === 'crítico' ? 'danger' : i.severity === 'atención' ? 'warn' : 'info'} /> }, { key: 'control', header: 'Control' }, { key: 'detail', header: 'Detalle' }, { key: 'systemValue', header: 'Sistema' }, { key: 'expectedValue', header: 'Esperado' }, { key: 'recommendation', header: 'Acción recomendada' }, { key: 'module', header: 'Ir', render: (i) => i.module ? <button className="ghost" onClick={() => setPage(i.module ?? 'Dashboard')}>{i.module}</button> : '—' }]} />
+        <SmartTable rows={filteredIssues} page={tablePage} pageSize={tablePageSize} onPageChange={(nextPage, nextSize) => { setTablePage(nextPage); setTablePageSize(nextSize); }} columns={[{ key: 'severity', header: 'Severidad', render: (i) => <Badge label={i.severity} tone={i.severity === 'crítico' ? 'danger' : i.severity === 'atención' ? 'warn' : 'info'} /> }, { key: 'control', header: 'Control' }, { key: 'detail', header: 'Detalle' }, { key: 'systemValue', header: 'Sistema' }, { key: 'expectedValue', header: 'Esperado' }, { key: 'recommendation', header: 'Acción recomendada' }, { key: 'module', header: 'Ir', render: (i) => i.module ? <button className="ghost" onClick={() => setPage(i.module ?? 'Dashboard')}>{i.module}</button> : '—' }]} />
       </div>
     </Section>
   );
