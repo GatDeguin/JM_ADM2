@@ -81,6 +81,8 @@ export default function App() {
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const notify = (nextToast: Toast) => {
     setToast(nextToast);
@@ -111,6 +113,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => { setMobileNavOpen(false); }, [page]);
+
   const applyState = (next: AppState, message: string, tone: Toast['tone'] = 'good') => {
     setState(next);
     notify({ text: message, tone });
@@ -133,9 +137,13 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
+      <button className="mobile-nav-toggle ghost" aria-label="Abrir menú" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((v) => !v)}>☰ Menú</button>
       <aside className="sidebar">
-        <LogoMark />
+        <div className="sidebar-top">
+          <LogoMark compact={sidebarCollapsed} />
+          <button className="ghost icon" aria-label={sidebarCollapsed ? 'Expandir menú lateral' : 'Colapsar menú lateral'} onClick={() => setSidebarCollapsed((v) => !v)}>{sidebarCollapsed ? '→' : '←'}</button>
+        </div>
         <nav>
           {pages.map((item) => <button key={item} className={page === item ? 'active' : ''} onClick={() => setPage(item)}>{item}</button>)}
         </nav>

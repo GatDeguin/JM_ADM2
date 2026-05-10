@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useMemo, useState, type ReactElement } from 'react';
 import type { AppState } from './types';
 import { includesText, money, qty } from './utils';
 
@@ -88,12 +88,17 @@ export function Drawer({ title, children, onClose }: { title: string; children: 
 }
 
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  const child = isValidElement(children) ? (children as ReactElement<{ id?: string; name?: string; required?: boolean }>) : null;
+  const inputId = child?.props.id ?? child?.props.name ?? `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const required = Boolean(child?.props.required);
+  const control = child ? cloneElement(child, { id: inputId }) : children;
   return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
+    <div className="field">
+      <label htmlFor={inputId}><span>{label}{required ? ' *' : ''}</span></label>
+      {control}
       {hint && <small>{hint}</small>}
-    </label>
+      {required && <small className="required-help">Campo obligatorio.</small>}
+    </div>
   );
 }
 
@@ -167,7 +172,7 @@ export function SmartTable<T extends object>({ rows, columns, onRowClick, dense 
         <tbody>
           {visible.map((row, index) => (
             <tr key={String((row as Record<string, unknown>).id ?? index)} onClick={() => onRowClick?.(row)} className={onRowClick ? 'clickable' : ''}>
-              {columns.map((column) => <td key={column.key} className={column.className}>{column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key] ?? '')}</td>)}
+              {columns.map((column) => <td key={column.key} className={column.className} data-label={column.header}>{column.render ? column.render(row) : String((row as Record<string, unknown>)[column.key] ?? '')}</td>)}
             </tr>
           ))}
         </tbody>
