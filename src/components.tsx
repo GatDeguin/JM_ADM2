@@ -22,11 +22,22 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neut
 }
 
 export function KPI({ label, value, hint, tone = 'neutral' }: { label: string; value: string | number; hint?: string; tone?: 'neutral' | 'good' | 'warn' | 'danger' }) {
+  const icon = tone === 'good' ? '↗' : tone === 'warn' ? '!' : tone === 'danger' ? '⚠' : '●';
   return (
     <div className={`kpi ${tone}`}>
+      <em aria-hidden="true">{icon}</em>
       <span>{label}</span>
       <strong>{value}</strong>
       {hint && <small>{hint}</small>}
+    </div>
+  );
+}
+
+export function TrendBars({ values }: { values: number[] }) {
+  const max = Math.max(...values, 1);
+  return (
+    <div className="trend-bars" aria-hidden="true">
+      {values.map((value, index) => <span key={`${index}-${value}`} style={{ height: `${Math.max(12, (value / max) * 100)}%` }} />)}
     </div>
   );
 }

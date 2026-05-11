@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AppState, Client, Combo, Formula, InventoryDraft, Material, Product, ProductionDraft, PurchaseDraft, SaleDraft, SaleDraftLine, Supplier } from './types';
-import { Badge, CommandPalette, ConfirmModal, Drawer, EmptyState, Field, KPI, LogoMark, MiniStat, Modal, ProgressBar, SmartTable, StockTriple } from './components';
+import { Badge, CommandPalette, ConfirmModal, Drawer, EmptyState, Field, KPI, LogoMark, MiniStat, Modal, ProgressBar, SmartTable, StockTriple, TrendBars } from './components';
 import { applyImport, buildExcelXml, exportFullExcel, exportModuleCsv, ImportDestination, parseCsv, rowsToObjects, templateCsv } from './importExport';
 import { exportBackup, freshSeedState, loadState, restoreBackup, saveState } from './storage';
 import { addOrUpdateEntity, audit, clientMetrics, closeSale, comboStockSummary, commitOperation, createMovement, dashboardMetrics, materialStock, previewInventoryCount, previewProduction, previewPurchase, previewSale, productStock, profitabilityByLine, registerProduction, registerPurchase, runIntegrityChecks, safeRepairState, suggestedExpiryForProduct, supplierPriceHistory, traceMaterialLot, traceProductLot, applyInventoryCount } from './engine';
@@ -124,7 +124,8 @@ export default function App() {
     return (
       <main className="loading-screen">
         <LogoMark />
-        <div className="loader" />
+        <div className="loader" role="status" aria-label="Cargando datos" />
+        <div className="skeleton-row" aria-hidden="true"><span /><span /><span /></div>
         <p>Cargando base local IndexedDB…</p>
       </main>
     );
@@ -163,7 +164,7 @@ export default function App() {
         </ConfirmModal>
       )}
       <CommandPalette state={state} open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={setPage} onOpenDrawer={openDrawer} onExport={exportSuite} />
-      {toast && <div className={`toast ${toast.tone}`}>{toast.text}</div>}
+      {toast && <div className={`toast ${toast.tone}`} role="status" aria-live="polite">{toast.text}</div>}
     </div>
   );
 }
@@ -219,6 +220,14 @@ function DashboardPage({ state, openDrawer, setPage }: PageProps) {
     ...state.productLots.filter((l) => l.qtyAvailable > 0 && l.status === 'liberado').map((l) => ({ id: l.id, type: 'productLot', name: l.productName, lot: l.lotNumber, expiry: l.expiry })),
     ...state.materialLots.filter((l) => l.qtyAvailable > 0 && l.status === 'liberado').map((l) => ({ id: l.id, type: 'materialLot', name: l.materialName, lot: l.lotNumber, expiry: l.expiry || '' }))
   ].filter((l) => l.expiry && l.expiry >= todayISO()).sort((a, b) => a.expiry.localeCompare(b.expiry)).slice(0, 8);
+  const monthlyTrend = useMemo(() => {
+    const buckets = new Map<string, number>();
+    state.orders.forEach((order) => {
+      const key = order.date.slice(0, 7);
+      buckets.set(key, (buckets.get(key) ?? 0) + order.total);
+    });
+    return Array.from(buckets.entries()).sort((a, b) => a[0].localeCompare(b[0])).slice(-8).map(([, total]) => total);
+  }, [state.orders]);
   return (
     <Section title="Dashboard financiero y operativo" subtitle="Valor de inventario, facturación, margen, deuda, alertas, vencimientos y salud operativa.">
       <div className="kpi-grid">
@@ -230,6 +239,10 @@ function DashboardPage({ state, openDrawer, setPage }: PageProps) {
         <KPI label="Margen bruto" value={money(metrics.grossMargin)} tone={metrics.grossMargin >= 0 ? 'good' : 'danger'} />
         <KPI label="Deuda clientes" value={money(metrics.debt)} tone={metrics.debt > 0 ? 'warn' : 'good'} />
         <KPI label="Salud operativa" value={`${metrics.score}%`} hint={`${metrics.issueCount} controles`} tone={metrics.critical ? 'danger' : metrics.score < 80 ? 'warn' : 'good'} />
+      </div>
+      <div className="card">
+        <header className="card-head"><h3>Tendencia de facturación</h3><Badge label="Últimos 8 meses" tone="info" /></header>
+        <TrendBars values={monthlyTrend.length ? monthlyTrend : [0]} />
       </div>
       <div className="grid two">
         <div className="card">
