@@ -295,7 +295,7 @@ interface PageProps {
 
 function RowActions({ onEdit, onDelete, deleteLabel }: { onEdit: () => void; onDelete: () => void; deleteLabel: string }) {
   return (
-    <div className="inline-actions">
+    <div className="inline-actions" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
       <button className="ghost" onClick={(event) => { event.stopPropagation(); onEdit(); }}>Editar</button>
       <button className="danger ghost" onClick={(event) => { event.stopPropagation(); onDelete(); }}>{deleteLabel}</button>
     </div>
@@ -1043,9 +1043,15 @@ function CombosPage({ state, applyState, setPendingConfirm }: PageProps) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
   const [components, setComponents] = useState<Array<{ productId: string; qty: number }>>([]);
-  const [componentProduct, setComponentProduct] = useState(state.products.find((p) => p.active)?.id ?? '');
+  const activeProducts = state.products.filter((p) => p.active);
+  const [componentProduct, setComponentProduct] = useState(activeProducts[0]?.id ?? '');
   const [componentQty, setComponentQty] = useState(1);
   const [editing, setEditing] = useState<Combo | null>(null);
+  useEffect(() => {
+    if (!activeProducts.some((p) => p.id === componentProduct)) {
+      setComponentProduct(activeProducts[0]?.id ?? '');
+    }
+  }, [activeProducts, componentProduct]);
   const addComponent = () => {
     if (!componentProduct || componentQty <= 0) return;
     setComponents((old) => [...old, { productId: componentProduct, qty: componentQty }]);
@@ -1086,7 +1092,7 @@ function CombosPage({ state, applyState, setPendingConfirm }: PageProps) {
         <div className="card form-card">
           <Field label="Nombre combo"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Precio"><input type="number" value={price} onChange={(e) => setPrice(toNumber(e.target.value))} /></Field>
-          <div className="form-grid three-cols"><Field label="Producto componente"><select value={componentProduct} onChange={(e) => setComponentProduct(e.target.value)}>{state.products.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Cantidad"><input type="number" value={componentQty} onChange={(e) => setComponentQty(toNumber(e.target.value))} /></Field><button className="ghost align-end" onClick={addComponent}>Agregar componente</button></div>
+          <div className="form-grid three-cols"><Field label="Producto componente"><select value={componentProduct} onChange={(e) => setComponentProduct(e.target.value)}><option value="">Seleccionar producto…</option>{activeProducts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Cantidad"><input type="number" value={componentQty} onChange={(e) => setComponentQty(toNumber(e.target.value))} /></Field><button className="ghost align-end" onClick={addComponent} disabled={!componentProduct}>Agregar componente</button></div>
           <SmartTable rows={components.map((c, index) => ({ id: `${c.productId}-${index}`, ...c, name: state.products.find((p) => p.id === c.productId)?.name ?? c.productId }))} dense columns={[{ key: 'name', header: 'Producto' }, { key: 'qty', header: 'Cantidad' }]} />
           <button className="primary wide-button" onClick={save}>Guardar combo</button>
         </div>
