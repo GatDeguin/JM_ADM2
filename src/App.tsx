@@ -171,11 +171,14 @@ export default function App() {
 
 function TopBar({ state, onExport, onBackup }: { state: AppState; onExport: () => void; onBackup: () => void }) {
   const metrics = dashboardMetrics(state);
+  const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
+  const buildRef = import.meta.env.VITE_BUILD_REF ?? 'local';
   return (
     <header className="topbar">
       <div>
         <span className="eyebrow">Local-first · IndexedDB · GitHub Pages ready</span>
         <strong>Operación JM Hair Cosmetic</strong>
+        <small className="build-meta">Versión {appVersion} · Build {buildRef}</small>
       </div>
       <div className="topbar-actions">
         <Badge label={`Salud ${metrics.score}%`} tone={metrics.critical ? 'danger' : metrics.score < 80 ? 'warn' : 'good'} />

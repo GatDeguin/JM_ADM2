@@ -82,6 +82,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   margin-bottom: 22px;
 }
 .topbar strong { display: block; font-family: Georgia, 'Times New Roman', serif; font-size: 22px; }
+.build-meta {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
 .eyebrow { color: var(--caramel); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; }
 .topbar-actions, .section-actions, .button-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .page-section { animation: pageIn .34s ease both; }
